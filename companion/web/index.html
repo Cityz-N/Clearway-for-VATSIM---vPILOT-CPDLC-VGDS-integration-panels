@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e1117" id="themeColor">
+  <script>
+    // apply the saved theme before first paint (no white flash)
+    try { if (localStorage.getItem("clearway.theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}
+  </script>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Clearway">
+  <title>Clearway</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icon.svg" alt="" class="brand-mark">
+      <div>
+        <div class="brand-name">Clearway</div>
+        <div class="brand-sub" id="sub">Not connected</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <span class="pill" id="unitPill" hidden></span>
+      <span class="dot" id="statusDot" title="Connection status"></span>
+    </div>
+  </header>
+
+  <div class="banner" id="pairBanner" hidden>
+    This phone isn't paired yet. On your PC, open Clearway → <b>Settings</b> and scan the pairing QR code.
+  </div>
+
+  <main>
+    <!-- Messages -->
+    <section class="view" id="view-messages">
+      <div class="view-head">
+        <h1>Messages</h1>
+        <div class="head-actions">
+          <button class="ghost small" id="ackAll">Mark all read</button>
+          <button class="ghost small" id="clearBtn">Clear</button>
+        </div>
+      </div>
+      <div id="messageList" class="list"></div>
+      <div class="empty" id="emptyState">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+        </div>
+        <p class="empty-title">Quiet skies</p>
+        <p class="muted" id="emptyHint">Connect in Settings, then log on to an ATC station from Requests.</p>
+      </div>
+    </section>
+
+    <!-- Requests -->
+    <section class="view" id="view-request" hidden>
+      <div class="view-head"><h1>Requests</h1></div>
+
+      <details class="card acc" open>
+        <summary><span>ATC logon</span><span class="sum-note" id="logonNote">Not logged on</span></summary>
+        <div class="acc-body">
+          <div class="row">
+            <input id="logonStation" class="mono" placeholder="Station, e.g. EGGX" maxlength="8" autocapitalize="characters">
+            <button class="primary" id="logonBtn">Log on</button>
+          </div>
+          <button class="ghost wide" id="logoffBtn">Log off current station</button>
+        </div>
+      </details>
+
+      <details class="card acc">
+        <summary><span>Level</span></summary>
+        <div class="acc-body">
+          <div class="row">
+            <label class="prefix">FL<input id="reqLevel" class="mono" inputmode="numeric" maxlength="3" placeholder="370"></label>
+            <select id="reqLevelReason" class="reason"></select>
+          </div>
+          <button class="primary wide" data-send="level">Send request</button>
+        </div>
+      </details>
+
+      <details class="card acc">
+        <summary><span>Direct to</span></summary>
+        <div class="acc-body">
+          <div class="row">
+            <input id="reqDirect" class="mono" placeholder="Waypoint" autocapitalize="characters">
+            <select id="reqDirectReason" class="reason"></select>
+          </div>
+          <button class="primary wide" data-send="direct">Send request</button>
+        </div>
+      </details>
+
+      <details class="card acc">
+        <summary><span>Speed</span></summary>
+        <div class="acc-body">
+          <div class="seg" id="speedUnit">
+            <button class="on" data-v="M">Mach</button><button data-v="K">Knots</button>
+          </div>
+          <div class="row">
+            <input id="reqSpeed" class="mono" inputmode="decimal" placeholder=".84">
+            <select id="reqSpeedReason" class="reason"></select>
+          </div>
+          <button class="primary wide" data-send="speed">Send request</button>
+        </div>
+      </details>
+
+      <details class="card acc">
+        <summary><span>When can we expect…</span></summary>
+        <div class="acc-body">
+          <select id="wcw">
+            <option value="HIGHER LEVEL">Higher level</option>
+            <option value="LOWER LEVEL">Lower level</option>
+            <option value="BACK ON ROUTE">Back on route</option>
+            <option value="CLIMB TO FL">Climb to FL…</option>
+            <option value="DESCENT TO FL">Descent to FL…</option>
+          </select>
+          <input id="wcwValue" class="mono" inputmode="numeric" maxlength="3" placeholder="FL" hidden>
+          <button class="primary wide" data-send="wcw">Send request</button>
+        </div>
+      </details>
+
+      <details class="card acc">
+        <summary><span>Free text to ATC</span></summary>
+        <div class="acc-body">
+          <textarea id="cpdlcText" class="mono" rows="3" placeholder="Message to the current station"></textarea>
+          <button class="primary wide" data-send="free">Send</button>
+        </div>
+      </details>
+
+      <details class="card acc">
+        <summary><span>Pre-departure clearance</span></summary>
+        <div class="acc-body">
+          <div class="grid2">
+            <label>Station<input id="pdcStation" class="mono" placeholder="e.g. EGLL" autocapitalize="characters"></label>
+            <label>Aircraft<input id="pdcType" class="mono" placeholder="B77W" autocapitalize="characters"></label>
+            <label>From<input id="pdcDep" class="mono" placeholder="EGLL" autocapitalize="characters"></label>
+            <label>To<input id="pdcArr" class="mono" placeholder="KJFK" autocapitalize="characters"></label>
+            <label>Stand<input id="pdcStand" class="mono" placeholder="512" autocapitalize="characters"></label>
+            <label>ATIS<input id="pdcAtis" class="mono" placeholder="A" maxlength="1" autocapitalize="characters"></label>
+          </div>
+          <button class="primary wide" data-send="pdc">Request clearance</button>
+        </div>
+      </details>
+
+      <details class="card acc">
+        <summary><span>Oceanic clearance</span></summary>
+        <div class="acc-body">
+          <div class="grid2">
+            <label>Station<input id="ocnStation" class="mono" placeholder="e.g. EGGX" autocapitalize="characters"></label>
+            <label>Entry point<input id="ocnEntry" class="mono" placeholder="MALOT" autocapitalize="characters"></label>
+            <label>ETA (UTC)<input id="ocnTime" class="mono" inputmode="numeric" placeholder="1430" maxlength="4"></label>
+            <label>Mach<input id="ocnMach" class="mono" inputmode="numeric" placeholder="84" maxlength="3"></label>
+            <label>FL<input id="ocnLevel" class="mono" inputmode="numeric" placeholder="370" maxlength="3"></label>
+            <label>Remarks<input id="ocnRmk" class="mono" placeholder="optional" autocapitalize="characters"></label>
+          </div>
+          <button class="primary wide" data-send="oceanic">Request clearance</button>
+        </div>
+      </details>
+
+      <details class="card acc">
+        <summary><span>Telex</span></summary>
+        <div class="acc-body">
+          <input id="telexStation" class="mono" placeholder="Station or callsign" autocapitalize="characters">
+          <textarea id="telexText" class="mono" rows="3" placeholder="Message"></textarea>
+          <button class="primary wide" data-send="telex">Send telex</button>
+        </div>
+      </details>
+
+      <details class="card acc">
+        <summary><span>Weather &amp; ATIS</span></summary>
+        <div class="acc-body">
+          <div class="seg" id="wxKind">
+            <button class="on" data-v="metar">METAR</button><button data-v="taf">TAF</button><button data-v="vatatis">ATIS</button>
+          </div>
+          <div class="row">
+            <input id="wxIcao" class="mono" placeholder="ICAO" maxlength="4" autocapitalize="characters">
+            <button class="primary" data-send="wx">Request</button>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- Settings -->
+    <section class="view" id="view-settings" hidden>
+      <div class="view-head"><h1>Settings</h1></div>
+
+      <div class="card status-card">
+        <div>
+          <div class="status-title" id="statusTitle">Offline</div>
+          <div class="muted small-text" id="statusDetail">Enter your details below, then connect.</div>
+        </div>
+        <button class="primary" id="connectBtn">Connect</button>
+      </div>
+
+      <div class="card">
+        <h2>Hoppie &amp; VATSIM</h2>
+        <label>Hoppie logon code
+          <input id="setLogon" type="password" autocomplete="off" placeholder="From hoppie.nl/acars">
+        </label>
+        <label>VATSIM CID
+          <input id="setCid" inputmode="numeric" placeholder="1234567">
+        </label>
+        <label>Callsign <span class="muted">(optional, otherwise read from VATSIM)</span>
+          <input id="setCallsign" class="mono" placeholder="BAW117" autocapitalize="characters">
+        </label>
+        <button class="primary wide" id="saveSettings">Save</button>
+      </div>
+
+      <div class="card">
+        <h2>Phone notifications</h2>
+        <div class="toggle-row"><span>Send notifications to my phone</span><label class="switch"><input type="checkbox" id="setNtfy"><i></i></label></div>
+        <div class="toggle-row"><span>Mute phone while the MSFS panel is open <span class="muted" id="panelState"></span></span><label class="switch"><input type="checkbox" id="setMute"><i></i></label></div>
+        <ol class="steps">
+          <li>Install the free <b>ntfy</b> app from the App Store.</li>
+          <li>Tap <b>+</b> and subscribe to this topic (server: ntfy.sh):</li>
+        </ol>
+        <div class="topic">
+          <code id="topic" class="mono"></code>
+          <button class="ghost small" id="copyTopic">Copy</button>
+        </div>
+        <div class="row">
+          <button class="ghost" id="testNotif">Send test</button>
+          <button class="ghost" id="newTopic">New topic</button>
+        </div>
+        <p class="muted small-text">Keep the topic name private, since anyone who knows it can read your notifications. It only contains message text, never your logon code.</p>
+      </div>
+
+      <div class="card" id="pairCard" hidden>
+        <h2>Pair your iPhone</h2>
+        <p class="muted small-text">Your phone must be on the same Wi-Fi as this PC. Scan with the iPhone camera, then in Safari tap <b>Share → Add to Home Screen</b>.</p>
+        <div class="qr" id="pairQr"></div>
+        <code class="mono pair-url" id="pairUrl"></code>
+      </div>
+
+      <div class="card">
+        <h2>Options</h2>
+        <div class="toggle-row"><span>Answer ADS-C position requests automatically</span><label class="switch"><input type="checkbox" id="setAdsc"><i></i></label></div>
+        <div class="toggle-row"><span>Light theme <span class="muted">(phone, PC and MSFS panel)</span></span><label class="switch"><input type="checkbox" id="setLight"><i></i></label></div>
+        <div class="toggle-row"><span>Open this page when Clearway starts <span class="muted">(otherwise double-click the tray icon)</span></span><label class="switch"><input type="checkbox" id="setBrowser"><i></i></label></div>
+      </div>
+
+      <p class="muted small-text center">Clearway, an unofficial client for the Hoppie ACARS network. Inspired by EasyCPDLC.</p>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab on" data-view="messages">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+      <span>Messages</span><b class="badge" id="badge" hidden></b>
+    </button>
+    <button class="tab" data-view="request">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
+      <span>Requests</span>
+    </button>
+    <button class="tab" data-view="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      <span>Settings</span>
+    </button>
+  </nav>
+
+  <!-- Free text reply sheet -->
+  <div class="sheet-backdrop" id="sheet" hidden>
+    <div class="sheet">
+      <div class="sheet-head"><b id="sheetTitle">Reply</b><button class="ghost small" id="sheetClose">Cancel</button></div>
+      <div class="sheet-quote mono" id="sheetQuote"></div>
+      <textarea id="sheetText" class="mono" rows="3" placeholder="Type your reply"></textarea>
+      <button class="primary wide" id="sheetSend">Send reply</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="vendor/qrcode.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

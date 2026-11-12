@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="Windows-1252"?>
+<SimBase.Document Type="InGamePanels" version="1,0">
+  <Filename>clearway-panel.spb</Filename>
+  <!-- Sizes are % of the UI height. The window is a transparent full-screen layer (16:9);
+       only the Clearway icon and card catch the mouse, so it can be placed anywhere. -->
+  <InGamePanels.InGamePanelDefinition id="PANEL_CLEARWAY" Name="Clearway"
+      url="html_ui/InGamePanels/ClearwayPanel/ClearwayPanel.html"
+      resizeDirections="None"
+      minWidth="20" minHeight="20"
+      defaultWidth="178" defaultHeight="100"
+      defaultTop="0" defaultRight="0"
+      icon="ICON_TOOLBAR_CLEARWAY" buttonVisible="true">
+  </InGamePanels.InGamePanelDefinition>
+</SimBase.Document>

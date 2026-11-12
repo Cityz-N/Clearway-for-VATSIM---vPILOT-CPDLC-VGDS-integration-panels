@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Clearway</title>
+  <meta charset="utf-8"/>
+  <link rel="stylesheet" href="/SCSS/common.css"/>
+  <link rel="stylesheet" href="ClearwayPanel.css"/>
+  <script type="text/javascript" src="/JS/coherent.js"></script>
+  <script type="text/javascript" src="/JS/common.js"></script>
+  <script type="text/javascript" src="/JS/dataStorage.js"></script>
+  <script type="text/javascript" src="/JS/simvar.js"></script>
+  <script type="text/javascript" src="/JS/Services/ToolBarPanels.js"></script>
+  <link rel="import" href="/templates/ingameUi/ingameUi.html"/>
+  <link rel="import" href="/templates/ingameUiHeader/ingameUiHeader.html"/>
+</head>
+<body class="border-box">
+  <ingamepanel-clearway>
+    <ingame-ui id="ClearwayPanel" panel-id="PANEL_CLEARWAY" title="" class="ingameUiFrame"
+               isPanelCloseable="false" collapsible="false" noBackground="true" handlebygame="true"
+               resize="none" auto-inside="" is-transparent>
+      <div id="cw-root">
+        <!-- drag capture layer, only active while dragging -->
+        <div id="cw-capture"></div>
+
+        <!-- floating icon -->
+        <div id="cw-bubble" class="offline" title="Clearway">
+          <svg viewBox="0 0 24 24" class="cw-glyph"><path d="M12 3.6c-4.7 0-8.5 3.3-8.5 7.4 0 2.2 1.1 4.2 3 5.6L6 20l4-1.9c.6.1 1.3.2 2 .2 4.7 0 8.5-3.3 8.5-7.4S16.7 3.6 12 3.6z"/></svg>
+          <span id="cw-count"></span>
+        </div>
+
+        <!-- expanded card -->
+        <div id="cw-card" class="hidden">
+          <div class="cw-head" id="cw-head">
+            <div class="cw-title">
+              <span class="cw-dot" id="cw-dot"></span>
+              <span id="cw-callsign">Clearway</span>
+            </div>
+            <span class="cw-pill hidden" id="cw-unit"></span>
+            <div class="cw-icon-btn" id="cw-min" title="Collapse">
+              <svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg>
+            </div>
+          </div>
+
+          <div class="cw-notice hidden" id="cw-notice"></div>
+
+          <div class="cw-list" id="cw-list"></div>
+
+          <div class="cw-section">
+            <div class="cw-section-head" id="cw-req-toggle">
+              <span>Request</span><span class="cw-chev" id="cw-req-chev"></span>
+            </div>
+            <div class="cw-section-body hidden" id="cw-req">
+              <div class="cw-seg" id="cw-req-kind">
+                <div class="cw-seg-btn on" data-v="logon">Logon</div>
+                <div class="cw-seg-btn" data-v="level">Level</div>
+                <div class="cw-seg-btn" data-v="direct">Direct</div>
+                <div class="cw-seg-btn" data-v="text">Text</div>
+                <div class="cw-seg-btn" data-v="wx">WX</div>
+              </div>
+              <div class="cw-row">
+                <input id="cw-input" class="cw-input" type="text" placeholder="Station, e.g. EGGX"/>
+                <div class="cw-btn primary" id="cw-send">Send</div>
+              </div>
+              <div class="cw-row hidden" id="cw-wx-row">
+                <div class="cw-seg small" id="cw-wx-kind">
+                  <div class="cw-seg-btn on" data-v="metar">METAR</div>
+                  <div class="cw-seg-btn" data-v="taf">TAF</div>
+                  <div class="cw-seg-btn" data-v="vatatis">ATIS</div>
+                </div>
+              </div>
+              <div class="cw-hint" id="cw-hint"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ingame-ui>
+  </ingamepanel-clearway>
+  <script type="text/javascript" src="ClearwayPanel.js"></script>
+</body>
+</html>

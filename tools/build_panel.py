@@ -1,0 +1,147 @@
+"""Build the Clearway MSFS toolbar panel into a Community-folder package.
+
+Requirements: the free MSFS SDK (install it from MSFS Developer Mode). The SDK's
+fspackagetool briefly starts Microsoft Flight Simulator to compile the panel
+definition (.spb) - that's normal; it closes again when the build is done.
+MSFS must be closed before running it, otherwise the tool exits without building.
+Alternatively, with MSFS open in Developer Mode: Tools > Project Editor > Open project
+(msfs-panel/clearway-panel-project.xml) > Build All, then run this script with --assemble.
+
+Usage:
+    python tools/build_panel.py              build into dist/clearway-panel
+    python tools/build_panel.py --install    build and copy into your Community folder
+    python tools/build_panel.py --assemble   skip the SDK step (re-use the last compiled .spb)
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+PANEL = ROOT / "msfs-panel"
+DIST = ROOT / "dist" / "clearway-panel"
+PACKAGE_NAME = "clearway-panel"
+VERSION = "0.1.0"
+
+
+def find_sdk_tool() -> Path:
+    candidates = [os.environ.get("MSFS_SDK", ""), r"C:\MSFS SDK", os.environ.get("MSFS2024_SDK", "")]
+    for base in candidates:
+        if base:
+            tool = Path(base) / "Tools" / "bin" / "fspackagetool.exe"
+            if tool.exists():
+                return tool
+    sys.exit("fspackagetool.exe not found. Install the MSFS SDK (Developer Mode > Help > SDK Installer).")
+
+
+def compile_spb() -> Path:
+    tool = find_sdk_tool()
+    build = PANEL / "build"
+    if build.exists():
+        shutil.rmtree(build)
+    print(f"Running {tool.name} (MSFS will open briefly to compile the panel)...")
+    result = subprocess.run([str(tool), str(PANEL / "clearway-panel-project.xml")], cwd=PANEL)
+    if result.returncode != 0:
+        sys.exit(f"fspackagetool failed with exit code {result.returncode}. See {build / '_temp'} for logs.")
+    spbs = list(build.rglob("*.spb"))
+    if not spbs:
+        sys.exit("Build finished but no .spb file was produced. Close MSFS and try again "
+                 "(the tool can't build while the sim is already running).")
+    cache = PANEL / "compiled"
+    cache.mkdir(exist_ok=True)
+    shutil.copy2(spbs[0], cache / "clearway-panel.spb")
+    return cache / "clearway-panel.spb"
+
+
+def win_filetime(path: Path) -> int:
+    return int(path.stat().st_mtime * 10_000_000) + 116444736000000000
+
+
+def assemble(spb: Path) -> None:
+    if DIST.exists():
+        shutil.rmtree(DIST)
+    shutil.copytree(PANEL / "html_ui", DIST / "html_ui")
+    # older sim versions look for toolbar icons here
+    icon = PANEL / "html_ui" / "icons" / "toolbar" / "ICON_TOOLBAR_CLEARWAY.svg"
+    legacy = DIST / "html_ui" / "Textures" / "Menu" / "toolbar"
+    legacy.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(icon, legacy / icon.name)
+    (DIST / "InGamePanels").mkdir(parents=True)
+    shutil.copy2(spb, DIST / "InGamePanels" / "clearway-panel.spb")
+
+    manifest = {
+        "dependencies": [
+            {"name": "fs-base-propdefs", "package_version": "0.1.2"},
+            {"name": "fs-base-ui", "package_version": "0.1.10"},
+        ],
+        "content_type": "",
+        "title": "Clearway CPDLC Panel",
+        "manufacturer": "Clearway",
+        "creator": "Clearway contributors",
+        "package_version": VERSION,
+        "minimum_game_version": "1.35.21",
+        "release_notes": {"neutral": {"LastUpdate": "", "OlderHistory": ""}},
+        "total_package_size": "0",
+    }
+    files = sorted(p for p in DIST.rglob("*") if p.is_file())
+    layout = {"content": [
+        {"path": p.relative_to(DIST).as_posix(), "size": p.stat().st_size, "date": win_filetime(p)} for p in files
+    ]}
+    (DIST / "layout.json").write_text(json.dumps(layout, indent=2))
+    total = sum(p.stat().st_size for p in files) + (DIST / "layout.json").stat().st_size
+    manifest["total_package_size"] = f"{total:020d}"
+    (DIST / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    print(f"Package ready: {DIST}")
+
+
+def community_folder() -> Path | None:
+    for cfg in [
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Packages" / "Microsoft.FlightSimulator_8wekyb3d8bbwe" / "LocalCache" / "UserCfg.opt",
+        Path(os.environ.get("APPDATA", "")) / "Microsoft Flight Simulator" / "UserCfg.opt",
+    ]:
+        if cfg.exists():
+            m = re.search(r'InstalledPackagesPath\s+"([^"]+)"', cfg.read_text(errors="ignore"))
+            if m:
+                return Path(m.group(1)) / "Community"
+    return None
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--install", action="store_true", help="copy the package into the MSFS Community folder")
+    ap.add_argument("--assemble", action="store_true", help="re-use msfs-panel/compiled/clearway-panel.spb")
+    args = ap.parse_args()
+
+    spb = PANEL / "compiled" / "clearway-panel.spb"
+    if args.assemble and not spb.exists():
+        # pick up a build made in the sim (Dev Mode > Project Editor > Build All)
+        built = list((PANEL / "build").rglob("*.spb")) if (PANEL / "build").exists() else []
+        if built:
+            spb.parent.mkdir(exist_ok=True)
+            shutil.copy2(built[0], spb)
+    if not args.assemble or not spb.exists():
+        spb = compile_spb()
+    assemble(spb)
+
+    if args.install:
+        community = community_folder()
+        if not community:
+            sys.exit("Couldn't find your Community folder; copy dist/clearway-panel there manually.")
+        target = community / PACKAGE_NAME
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(DIST, target)
+        print(f"Installed to {target}. Restart MSFS if it's running.")
+
+
+if __name__ == "__main__":
+    t = time.time()
+    main()
+    print(f"Done in {time.time() - t:.0f}s")
