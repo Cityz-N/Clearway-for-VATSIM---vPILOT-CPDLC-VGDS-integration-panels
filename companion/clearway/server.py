@@ -140,6 +140,12 @@ class Handler(BaseHTTPRequestHandler):
                 s.inforeq(str(body.get("what", "")), str(body.get("icao", "")))
             elif action == "clear":
                 s.clear_history()
+            elif action == "delete":
+                s.delete(int(body["id"]))
+            elif action == "restore":
+                s.restore(int(body["id"]) if body.get("id") is not None else None)
+            elif action == "collapse":
+                s.collapse(int(body["id"]) if body.get("id") is not None else None, bool(body.get("collapsed", True)))
             elif action == "position":
                 s.panel_seen = time.time()
                 s.set_panel_position(float(body["lat"]), float(body["lon"]), float(body.get("alt", 0)))

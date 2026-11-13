@@ -96,6 +96,12 @@
     var p = function (n) { return (n < 10 ? "0" : "") + n; };
     return p(d.getUTCHours()) + p(d.getUTCMinutes()) + "z";
   }
+  function findMsg(id) {
+    if (!state) return null;
+    for (var i = 0; i < state.messages.length; i++) if (state.messages[i].id === id) return state.messages[i];
+    return null;
+  }
+
   function hint(text, err) {
     var h = el("cw-hint");
     h.textContent = text || "";
@@ -154,13 +160,13 @@
     if (!state || !reachable) { list.innerHTML = ""; return; }
     var msgs = state.messages.slice(-30).reverse();
     if (!msgs.length) {
-      list.innerHTML = "<div class=\"cw-empty\">No messages yet.</div>";
+      list.innerHTML = "<div class=\"cw-empty\">No messages yet.</div>" + trashHtml();
       return;
     }
     var html = "";
     for (var i = 0; i < msgs.length; i++) {
       var m = msgs[i];
-      if (m.dir === "sys") { html += "<div class=\"cw-sys\">" + esc(m.text) + "</div>"; continue; }
+      if (m.dir === "sys") { html += "<div class=\"cw-sys\">" + esc(m.text) + " <span class=\"cw-del\" data-del=\"" + m.id + "\">&#215;</span></div>"; continue; }
       var unread = m.dir === "in" && !m.acked;
       var label = m.kind === "cpdlc" ? "CPDLC" : (m.kind === "telex" ? "TELEX" : "INFO");
       var actions = "";
@@ -174,17 +180,37 @@
       if (m.dir === "out" && m.status === "awaiting") st = "Awaiting reply…";
       if (m.dir === "out" && m.status === "answered") st = "ATC: " + esc(String(m.reply).replace(/@/g, ""));
       if (m.dir === "out" && m.status === "failed") st = "Not delivered";
-      html += "<div class=\"cw-msg " + m.dir + (unread ? " unread" : "") + "\" data-msg=\"" + m.id + "\">" +
+      html += "<div class=\"cw-msg " + m.dir + (unread ? " unread" : "") + (m.collapsed ? " collapsed" : "") + "\" data-msg=\"" + m.id + "\">" +
         "<div class=\"cw-bar\"></div>" +
         "<div class=\"cw-meta\"><span class=\"cw-chip " + m.kind + "\">" + label + "</span>" +
         "<span class=\"cw-station\">" + (m.dir === "out" ? "→ " : "") + esc(m.station) + "</span>" +
-        "<span class=\"cw-time\">" + utc(m.ts) + "</span></div>" +
+        "<span class=\"cw-time\">" + utc(m.ts) + "</span>" +
+        "<span class=\"cw-fold\" data-fold=\"" + m.id + "\" title=\"" + (m.collapsed ? "Expand" : "Collapse") + "\"></span>" +
+        "<span class=\"cw-del\" data-del=\"" + m.id + "\" title=\"Delete\">&#215;</span></div>" +
         "<div class=\"cw-text\">" + fmt(m.text) + "</div>" +
         (st ? "<div class=\"cw-state\">" + st + "</div>" : "") +
         (actions ? "<div class=\"cw-actions\">" + actions + "</div>" : "") +
         "</div>";
     }
-    list.innerHTML = html;
+    list.innerHTML = html + trashHtml();
+  }
+
+  // Messages deleted this session (kept by the companion until it quits).
+  var trashOpen = false;
+  function trashHtml() {
+    var t = (state && state.trash) || [];
+    if (!t.length) { trashOpen = false; return ""; }
+    var html = "<div class=\"cw-trash-bar\"><span>" + t.length + " deleted</span>" +
+      "<span class=\"cw-link\" data-trash-toggle=\"1\">" + (trashOpen ? "Hide" : "Show") + "</span></div>";
+    if (trashOpen) {
+      for (var i = 0; i < t.length && i < 15; i++) {
+        var m = t[i];
+        html += "<div class=\"cw-trash-row\"><span class=\"cw-trash-text\">" + esc((m.dir === "out" ? "→ " : "") + m.station + " · " + String(m.text).replace(/@/g, "")) +
+          "</span><span class=\"cw-link\" data-restore=\"" + m.id + "\">Restore</span></div>";
+      }
+      html += "<div class=\"cw-trash-all\"><span class=\"cw-link\" data-restore-all=\"1\">Restore all</span></div>";
+    }
+    return html;
   }
 
   // ------------------------------------------------------------ layout: icon + card
@@ -273,54 +299,126 @@
     });
   }
 
-  var placeholders = {
-    logon: "Station, e.g. EGGX",
-    level: "Flight level, e.g. 370",
-    direct: "Waypoint",
-    text: "Free text to current ATC",
-    wx: "Airport ICAO, e.g. EGLL",
+  // Request forms. Each field: k = key, ph = placeholder, half = takes half the width.
+  var FORMS = {
+    logon: [{ k: "station", ph: "ATC station, e.g. EGGX" }],
+    level: [{ k: "fl", ph: "Flight level, e.g. 370" }],
+    direct: [{ k: "fix", ph: "Waypoint" }],
+    text: [{ k: "text", ph: "Free text to current ATC" }],
+    pdc: [
+      { k: "station", ph: "Station, e.g. EGLL", half: true }, { k: "type", ph: "Aircraft", half: true },
+      { k: "dep", ph: "From", half: true }, { k: "arr", ph: "To", half: true },
+      { k: "stand", ph: "Stand", half: true }, { k: "atis", ph: "ATIS letter", half: true }
+    ],
+    oceanic: [
+      { k: "station", ph: "Station, e.g. EGGX", half: true }, { k: "entry", ph: "Entry point", half: true },
+      { k: "eta", ph: "ETA UTC, e.g. 1430", half: true }, { k: "mach", ph: "Mach, e.g. 84", half: true },
+      { k: "fl", ph: "FL, e.g. 370", half: true }, { k: "rmk", ph: "Remarks (optional)", half: true }
+    ],
+    telex: [{ k: "station", ph: "Station or callsign" }, { k: "text", ph: "Message" }],
+    wx: [{ k: "icao", ph: "Airport ICAO, e.g. EGLL" }]
   };
+  var formVals = {};
+
+  function prefill(kind) {
+    var f = (state && state.flight) || {};
+    var v = formVals[kind] || (formVals[kind] = {});
+    if (kind === "pdc") {
+      if (!v.station && f.departure) v.station = f.departure;
+      if (!v.type && f.aircraft) v.type = f.aircraft;
+      if (!v.dep && f.departure) v.dep = f.departure;
+      if (!v.arr && f.arrival) v.arr = f.arrival;
+    }
+    if (kind === "oceanic" && !v.fl && f.cruise) v.fl = String(f.cruise).replace(/^FL/i, "").slice(0, 3);
+    return v;
+  }
+
+  function renderFields() {
+    var vals = prefill(reqKind);
+    var html = "";
+    var fields = FORMS[reqKind];
+    for (var i = 0; i < fields.length; i++) {
+      var fd = fields[i];
+      html += "<input id=\"cw-f-" + fd.k + "\" data-k=\"" + fd.k + "\" class=\"cw-input cw-field" + (fd.half ? " half" : "") +
+        "\" type=\"text\" placeholder=\"" + fd.ph + "\" value=\"" + esc(vals[fd.k] || "") + "\"/>";
+    }
+    var box = el("cw-fields");
+    box.innerHTML = html;
+    var inputs = box.getElementsByTagName("input");
+    for (var j = 0; j < inputs.length; j++) wireInput(inputs[j]);
+    placeCard();
+  }
 
   function setReqKind(v) {
     reqKind = v;
-    var btns = el("cw-req-kind").children;
-    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("on", btns[i].getAttribute("data-v") === v);
-    el("cw-input").placeholder = placeholders[v];
-    el("cw-input").value = "";
-    el("cw-wx-row").classList.toggle("hidden", v !== "wx");
+    ["cw-req-kind", "cw-req-kind2"].forEach(function (id) {
+      var btns = el(id).children;
+      for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("on", btns[i].getAttribute("data-v") === v);
+    });
+    el("cw-wx-kind").classList.toggle("hidden", v !== "wx");
+    renderFields();
     updateSendLabel();
     hint("");
   }
 
   function updateSendLabel() {
     var logged = state && reachable && (state.current_unit || state.pending_logon);
-    el("cw-send").textContent = reqKind === "logon" && logged ? "Log off" : (reqKind === "logon" ? "Log on" : (reqKind === "wx" ? "Get" : "Send"));
+    var label = { logon: logged ? "Log off" : "Log on", wx: "Get", pdc: "Request", oceanic: "Request" }[reqKind] || "Send";
+    el("cw-send").textContent = label;
+  }
+
+  function field(k) {
+    var input = el("cw-f-" + k);
+    return input ? input.value.trim().toUpperCase() : "";
   }
 
   function send() {
-    var v = el("cw-input").value.trim().toUpperCase();
+    var cs = state ? state.callsign : "";
     var logged = state && (state.current_unit || state.pending_logon);
+    var clear = [];
     if (reqKind === "logon") {
-      if (logged && !v) return act("logoff", {}, "Logged off");
-      if (!v) return hint("Enter a station", true);
-      act("logon", { station: v }, "Logon request sent to " + v);
+      var st = field("station");
+      if (logged && !st) return act("logoff", {}, "Logged off");
+      if (!st) return hint("Enter a station", true);
+      act("logon", { station: st }, "Logon request sent to " + st);
     } else if (reqKind === "level") {
-      var fl = v.replace(/\D/g, "");
+      var fl = field("fl").replace(/\D/g, "");
       if (!fl) return hint("Enter a flight level", true);
       act("cpdlc", { text: "REQUEST FL" + fl }, "Request sent");
     } else if (reqKind === "direct") {
-      if (!v) return hint("Enter a waypoint", true);
-      act("cpdlc", { text: "REQUEST DIRECT TO " + v }, "Request sent");
+      if (!field("fix")) return hint("Enter a waypoint", true);
+      act("cpdlc", { text: "REQUEST DIRECT TO " + field("fix") }, "Request sent");
     } else if (reqKind === "text") {
-      if (!v) return hint("Type a message", true);
-      act("cpdlc", { text: v, ra: "Y" }, "Sent");
+      if (!field("text")) return hint("Type a message", true);
+      act("cpdlc", { text: field("text"), ra: "Y" }, "Sent");
+      clear = ["text"];
+    } else if (reqKind === "pdc") {
+      if (!field("station") || !field("type") || !field("dep") || !field("arr") || !field("stand") || !field("atis")) {
+        return hint("Fill in all clearance fields", true);
+      }
+      act("telex", { station: field("station"), text: "REQUEST PREDEP CLEARANCE " + cs + " " + field("type") + " TO " + field("arr") +
+        " AT " + field("dep") + " STAND " + field("stand") + " ATIS " + field("atis") }, "Clearance requested");
+    } else if (reqKind === "oceanic") {
+      if (!field("station") || !field("entry") || !field("eta") || !field("mach") || !field("fl")) {
+        return hint("Fill in station, entry, ETA, Mach and FL", true);
+      }
+      act("telex", { station: field("station"), text: "OCEANIC CLEARANCE REQUEST CALLSIGN: " + cs + " ENTRY POINT: " + field("entry") +
+        " AT: " + field("eta") + " REQ: M." + field("mach").replace(/\D/g, "") + " FL" + field("fl").replace(/\D/g, "") +
+        " RMKS: " + (field("rmk") || "NIL") }, "Oceanic clearance requested");
+    } else if (reqKind === "telex") {
+      if (!field("station") || !field("text")) return hint("Enter a station and a message", true);
+      act("telex", { station: field("station"), text: field("text") }, "Telex sent");
+      clear = ["text"];
     } else if (reqKind === "wx") {
-      if (v.length !== 4) return hint("Enter a 4-letter ICAO", true);
-      act("inforeq", { what: wxKind, icao: v }, "Requested");
+      if (field("icao").length !== 4) return hint("Enter a 4-letter ICAO", true);
+      act("inforeq", { what: wxKind, icao: field("icao") }, "Requested");
     }
-    el("cw-input").value = "";
+    for (var i = 0; i < clear.length; i++) {
+      var input = el("cw-f-" + clear[i]);
+      if (input) input.value = "";
+      if (formVals[reqKind]) formVals[reqKind][clear[i]] = "";
+    }
   }
-
   // ------------------------------------------------------------ start
   function start() {
     if (started) return;
@@ -344,10 +442,18 @@
       save("CLEARWAY_REQ_OPEN", reqOpen);
       placeCard();
     });
-    el("cw-req-kind").addEventListener("click", function (e) {
-      var v = e.target.getAttribute && e.target.getAttribute("data-v");
-      if (v) setReqKind(v);
+    ["cw-req-kind", "cw-req-kind2"].forEach(function (id) {
+      el(id).addEventListener("click", function (e) {
+        var v = e.target.getAttribute && e.target.getAttribute("data-v");
+        if (v) setReqKind(v);
+      });
     });
+    // remember what was typed when switching between request types
+    el("cw-fields").addEventListener("input", function (e) {
+      var k = e.target.getAttribute && e.target.getAttribute("data-k");
+      if (k) { (formVals[reqKind] || (formVals[reqKind] = {}))[k] = e.target.value; }
+    });
+    el("cw-clear").addEventListener("click", function () { act("clear", {}, ""); });
     el("cw-wx-kind").addEventListener("click", function (e) {
       var v = e.target.getAttribute && e.target.getAttribute("data-v");
       if (!v) return;
@@ -356,7 +462,6 @@
       for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("on", btns[i] === e.target);
     });
     el("cw-send").addEventListener("click", send);
-    wireInput(el("cw-input"));
 
     el("cw-list").addEventListener("click", function (e) {
       var t = e.target;
@@ -364,6 +469,19 @@
       if (r) return act("reply", { id: +t.getAttribute("data-id"), text: r }, r + " sent");
       var a = t.getAttribute && t.getAttribute("data-ack");
       if (a) return act("ack", { id: +a });
+      var d = t.getAttribute && t.getAttribute("data-del");
+      if (d) return act("delete", { id: +d });
+      var fo = t.getAttribute && t.getAttribute("data-fold");
+      if (fo) {
+        var fm = findMsg(+fo);
+        return act("collapse", { id: +fo, collapsed: !(fm && fm.collapsed) });
+      }
+      if (t.getAttribute && t.getAttribute("data-trash-toggle")) { trashOpen = !trashOpen; renderList(); return placeCard(); }
+      var rs = t.getAttribute && t.getAttribute("data-restore");
+      if (rs) return act("restore", { id: +rs }, "");
+      if (t.getAttribute && t.getAttribute("data-restore-all")) return act("restore", {}, "");
+      var folded = t.closest ? t.closest(".cw-msg.collapsed") : null;
+      if (folded) return act("collapse", { id: +folded.getAttribute("data-msg"), collapsed: false });
       var card = t.closest ? t.closest(".cw-msg.unread") : null;
       if (card && state) {
         var id = +card.getAttribute("data-msg");

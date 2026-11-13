@@ -295,3 +295,39 @@ button { font-family: var(--font); }
   body { font-size: 15.5px; }
   .tabbar { top: auto; }
 }
+
+/* delete buttons */
+.del {
+  border: 0; background: transparent; color: var(--muted); cursor: pointer;
+  font-size: 18px; line-height: 1; padding: 2px 6px; margin: -4px -8px -4px 2px; border-radius: 8px; opacity: .6;
+}
+.del:hover, .del:active { opacity: 1; color: var(--rose); background: var(--rose-soft); }
+.sys .del { font-size: 15px; margin: 0 0 0 2px; }
+/* collapse */
+.fold {
+  border: 0; background: transparent; color: var(--muted); cursor: pointer;
+  padding: 3px; margin: -4px 0 -4px 6px; border-radius: 8px; display: inline-flex; opacity: .7;
+}
+.fold:hover { opacity: 1; background: var(--surface-2); }
+.fold svg { transition: transform .2s; }
+.msg.collapsed { padding: 10px 16px; cursor: pointer; }
+.msg.collapsed .fold svg { transform: rotate(180deg); }
+.msg.collapsed .msg-text {
+  margin-top: 4px; font-size: 13.5px; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.msg.collapsed .msg-text .var { background: none; color: inherit; padding: 0; }
+.msg.collapsed .msg-foot { display: none; }
+
+/* recently deleted */
+.trash-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 14px; padding: 8px 6px 8px 14px; border-radius: 14px;
+  border: 1px dashed var(--line); font-size: 13.5px;
+}
+.trash-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.trash-row {
+  display: flex; align-items: center; gap: 8px; background: var(--surface);
+  border-radius: 12px; padding: 6px 6px 6px 10px; opacity: .85;
+}
+.trash-text { flex: 1; min-width: 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }

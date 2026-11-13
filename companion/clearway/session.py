@@ -47,6 +47,7 @@ class Session:
         self.lock = threading.RLock()
         self.version = 1
         self.messages: list[dict] = []
+        self.trash: list[dict] = []    # deleted this session, can be restored until Clearway quits
         self._next_id = 1
         self._next_min = random.randint(1, 50)
         self.status = "offline"        # offline | connecting | online | error
@@ -85,6 +86,7 @@ class Session:
                 "status": "none",
                 "reply": None,
                 "acked": direction != "in",
+                "collapsed": False,
             }
             msg.update(extra)
             self._next_id += 1
@@ -460,9 +462,44 @@ class Session:
                     m["acked"] = True
             self._bump()
 
-    def clear_history(self) -> None:
+    def _to_trash(self, removed: list[dict]) -> None:
+        self.trash.extend(removed)
+        del self.trash[:-MAX_MESSAGES]
+
+    def delete(self, msg_id: int) -> None:
         with self.lock:
-            self.messages = [m for m in self.messages if m["dir"] == "in" and m["status"] in ("open", "standby")]
+            removed = [m for m in self.messages if m["id"] == msg_id]
+            if not removed:
+                raise ValueError("Message not found.")
+            self.messages = [m for m in self.messages if m["id"] != msg_id]
+            self._to_trash(removed)
+            self._bump()
+
+    def clear_history(self) -> None:
+        """Delete everything except messages still waiting for an answer (restorable)."""
+        with self.lock:
+            keep = lambda m: m["dir"] == "in" and m["status"] in ("open", "standby")  # noqa: E731
+            self._to_trash([m for m in self.messages if not keep(m)])
+            self.messages = [m for m in self.messages if keep(m)]
+            self._bump()
+
+    def restore(self, msg_id: int | None = None) -> None:
+        """Bring back one deleted message (or all of them when msg_id is None)."""
+        with self.lock:
+            back = [m for m in self.trash if msg_id is None or m["id"] == msg_id]
+            if not back:
+                raise ValueError("Nothing to restore.")
+            ids = {m["id"] for m in back}
+            self.trash = [m for m in self.trash if m["id"] not in ids]
+            self.messages = sorted(self.messages + back, key=lambda m: m["id"])
+            self._bump()
+
+    def collapse(self, msg_id: int | None, collapsed: bool) -> None:
+        """Fold a message to one line (or all messages when msg_id is None)."""
+        with self.lock:
+            for m in self.messages:
+                if msg_id is None or m["id"] == msg_id:
+                    m["collapsed"] = bool(collapsed)
             self._bump()
 
     def logon(self, station: str) -> None:
@@ -553,6 +590,8 @@ class Session:
                 "panel_active": self.panel_active(),
                 "unacked": unacked,
                 "messages": msgs,
+                "trash": [{k: m.get(k) for k in ("id", "ts", "dir", "kind", "station", "text")}
+                          for m in reversed(self.trash) if m["dir"] != "sys"],
                 "settings": self.cfg.public(),
                 "base_url": self.base_url,
             }

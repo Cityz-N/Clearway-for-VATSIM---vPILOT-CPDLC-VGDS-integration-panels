@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.1
+
+- MSFS panel: request pre-departure clearance, oceanic clearance and telex (the panel previously only had logon, level, direct, free text and weather)
+- Delete single messages (× on each message) in the panel and on the phone; trash button in the panel to clear old messages
+- Collapse any message to a single line (chevron), synced between phone and panel
+- Restore deleted messages (kept until Clearway quits)
+
+## 0.1.0
 
 First version.
 

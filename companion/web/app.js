@@ -117,7 +117,7 @@
       : "Connect in Settings, then log on to an ATC station from Requests.";
 
     list.innerHTML = msgs.map((m) => {
-      if (m.dir === "sys") return `<div class="sys">${esc(m.text)} · ${utc(m.ts)}</div>`;
+      if (m.dir === "sys") return `<div class="sys">${esc(m.text)} · ${utc(m.ts)} <button class="del" data-del="${m.id}" aria-label="Delete">×</button></div>`;
       const unread = m.dir === "in" && !m.acked;
       const label = m.kind === "cpdlc" ? "CPDLC" : m.kind === "telex" ? "Telex" : "Info";
       const arrow = m.dir === "out" ? "To" : "From";
@@ -134,12 +134,13 @@
       if (m.dir === "out" && m.status === "awaiting") st = "Awaiting reply…";
       if (m.dir === "out" && m.status === "answered") st = `ATC replied <b>${esc(m.reply.replace(/@/g, ""))}</b>`;
       if (m.dir === "out" && m.status === "failed") st = `<span style="color:var(--rose)">Not delivered</span>`;
-      return `<article class="msg ${m.dir} ${unread ? "unread" : ""}" id="m${m.id}" data-msg="${m.id}">
-        <div class="msg-head"><span class="chip ${m.kind}">${label}</span><span>${arrow}</span><span class="msg-station">${esc(m.station)}</span><span class="msg-time">${utc(m.ts)}</span></div>
+      return `<article class="msg ${m.dir} ${unread ? "unread" : ""} ${m.collapsed ? "collapsed" : ""}" id="m${m.id}" data-msg="${m.id}">
+        <div class="msg-head"><span class="chip ${m.kind}">${label}</span><span>${arrow}</span><span class="msg-station">${esc(m.station)}</span><span class="msg-time">${utc(m.ts)}</span><button class="fold" data-fold="${m.id}" aria-label="${m.collapsed ? "Expand" : "Collapse"}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button><button class="del" data-del="${m.id}" aria-label="Delete">×</button></div>
         <div class="msg-text">${fmt(m.text)}</div>
         ${st || foot ? `<div class="msg-foot">${st ? `<span class="state">${st}</span>` : ""}${foot}</div>` : ""}
       </article>`;
     }).join("");
+    renderTrash();
 
     // flash newly arrived inbound messages
     const ids = new Set(state.messages.map((m) => m.id));
@@ -154,6 +155,24 @@
       const el = document.querySelector(location.hash);
       if (el) { el.scrollIntoView({ block: "center" }); el.classList.add("flash"); }
     }
+  }
+
+  let trashOpen = false;
+  function renderTrash() {
+    const t = state.trash || [];
+    const box = $("trashBox");
+    if (!t.length) { box.innerHTML = ""; trashOpen = false; return; }
+    const label = t.length === 1 ? "1 deleted message" : `${t.length} deleted messages`;
+    let html = `<div class="trash-bar"><span>${label} <span class="muted">· this session</span></span>
+      <button class="ghost small" data-toggle>${trashOpen ? "Hide" : "Show"}</button></div>`;
+    if (trashOpen) {
+      html += `<div class="trash-list">` + t.map((m) => `<div class="trash-row">
+          <span class="chip ${m.kind}">${m.kind === "cpdlc" ? "CPDLC" : m.kind === "telex" ? "Telex" : "Info"}</span>
+          <span class="trash-text mono">${esc((m.dir === "out" ? "→ " : "") + m.station + " · " + m.text.replace(/@/g, ""))}</span>
+          <button class="ghost small" data-restore="${m.id}">Restore</button></div>`).join("") +
+        `<button class="ghost wide" data-restore-all>Restore all</button></div>`;
+    }
+    box.innerHTML = html;
   }
 
   function renderRequests() {
@@ -238,6 +257,13 @@
     if (b && b.dataset.reply) return act("reply", { id: +b.dataset.id, text: b.dataset.reply }, `${b.dataset.reply} sent`);
     if (b && b.dataset.free) return openSheet(+b.dataset.free);
     if (b && b.dataset.ack) return act("ack", { id: +b.dataset.ack });
+    if (b && b.dataset.del) return act("delete", { id: +b.dataset.del });
+    if (b && b.dataset.fold) {
+      const m = state.messages.find((x) => x.id === +b.dataset.fold);
+      return act("collapse", { id: +b.dataset.fold, collapsed: !(m && m.collapsed) });
+    }
+    const folded = e.target.closest(".msg.collapsed");
+    if (folded && !b) return act("collapse", { id: +folded.dataset.msg, collapsed: false });
     const card = e.target.closest(".msg.unread");
     if (card && !b) {
       const m = state.messages.find((x) => x.id === +card.dataset.msg);
@@ -245,7 +271,13 @@
     }
   });
   $("ackAll").onclick = () => act("ack", {});
-  $("clearBtn").onclick = () => { if (confirm("Clear the message history? Messages still waiting for an answer are kept.")) act("clear"); };
+  $("trashBox").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.toggle !== undefined) { trashOpen = !trashOpen; return renderTrash(); }
+    if (b.dataset.restoreAll !== undefined) return act("restore", {}, "Restored");
+    if (b.dataset.restore) return act("restore", { id: +b.dataset.restore }, "Restored");
+  });
+  $("clearBtn").onclick = () => { if (confirm("Clear the message history? Messages still waiting for an answer are kept (delete those with ×).")) act("clear"); };
 
   // reply sheet
   let sheetId = null;

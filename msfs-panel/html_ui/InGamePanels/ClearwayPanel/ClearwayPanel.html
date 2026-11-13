@@ -36,6 +36,9 @@
               <span id="cw-callsign">Clearway</span>
             </div>
             <span class="cw-pill hidden" id="cw-unit"></span>
+            <div class="cw-icon-btn" id="cw-clear" title="Clear old messages">
+              <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5"/></svg>
+            </div>
             <div class="cw-icon-btn" id="cw-min" title="Collapse">
               <svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg>
             </div>
@@ -55,20 +58,23 @@
                 <div class="cw-seg-btn" data-v="level">Level</div>
                 <div class="cw-seg-btn" data-v="direct">Direct</div>
                 <div class="cw-seg-btn" data-v="text">Text</div>
+              </div>
+              <div class="cw-seg" id="cw-req-kind2">
+                <div class="cw-seg-btn" data-v="pdc">Clearance</div>
+                <div class="cw-seg-btn" data-v="oceanic">Oceanic</div>
+                <div class="cw-seg-btn" data-v="telex">Telex</div>
                 <div class="cw-seg-btn" data-v="wx">WX</div>
               </div>
-              <div class="cw-row">
-                <input id="cw-input" class="cw-input" type="text" placeholder="Station, e.g. EGGX"/>
+              <div class="cw-seg hidden" id="cw-wx-kind">
+                <div class="cw-seg-btn on" data-v="metar">METAR</div>
+                <div class="cw-seg-btn" data-v="taf">TAF</div>
+                <div class="cw-seg-btn" data-v="vatatis">ATIS</div>
+              </div>
+              <div class="cw-fields" id="cw-fields"></div>
+              <div class="cw-row cw-send-row">
+                <div class="cw-hint" id="cw-hint"></div>
                 <div class="cw-btn primary" id="cw-send">Send</div>
               </div>
-              <div class="cw-row hidden" id="cw-wx-row">
-                <div class="cw-seg small" id="cw-wx-kind">
-                  <div class="cw-seg-btn on" data-v="metar">METAR</div>
-                  <div class="cw-seg-btn" data-v="taf">TAF</div>
-                  <div class="cw-seg-btn" data-v="vatatis">ATIS</div>
-                </div>
-              </div>
-              <div class="cw-hint" id="cw-hint"></div>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-"""Build the Clearway MSFS toolbar panel into a Community-folder package.
+﻿"""Build the Clearway MSFS toolbar panel into a Community-folder package.
 
 Requirements: the free MSFS SDK (install it from MSFS Developer Mode). The SDK's
 fspackagetool briefly starts Microsoft Flight Simulator to compile the panel
@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PANEL = ROOT / "msfs-panel"
 DIST = ROOT / "dist" / "clearway-panel"
 PACKAGE_NAME = "clearway-panel"
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 
 def find_sdk_tool() -> Path:

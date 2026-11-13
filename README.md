@@ -20,12 +20,13 @@ You can use both at the same time; they stay in sync.
 - CPDLC logon and logoff, automatic handover to the next station
 - One-tap answers: **WILCO / UNABLE / STANDBY**, **AFFIRM / NEGATIVE**, **ROGER**, or free text
 - Requests: level, direct to, speed, "when can we expect…", free text
-- Pre-departure clearance (PDC/DCL), oceanic clearance request and telex
+- Pre-departure clearance (PDC/DCL), oceanic clearance request and telex, from the phone and the MSFS panel
 - METAR, TAF and VATSIM ATIS lookups
 - Automatic ADS-C position reports, using the sim's position when the panel is open and VATSIM data otherwise
 - Phone notifications with quick-reply buttons
 - Optionally mutes phone notifications while the MSFS panel is open
 - Callsign and flight plan read automatically from VATSIM using your CID
+- Collapse messages to one line, delete them, and restore deleted ones (until Clearway quits)
 - Dark theme by default, with a light theme in Settings that also applies to the MSFS panel
 - Runs quietly as a tray icon with no console window
 

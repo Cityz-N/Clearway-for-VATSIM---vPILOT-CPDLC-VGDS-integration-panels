@@ -222,3 +222,48 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 .cw-input:focus { border-color: var(--accent); }
 .cw-input::placeholder { text-transform: none; color: var(--glyph-off); }
 .cw-hint { font-size: 0.78em; color: var(--muted); }
+
+/* request forms */
+.cw-fields { display: flex; flex-wrap: wrap; justify-content: space-between; }
+.cw-field { width: 100%; flex-grow: 0; margin-bottom: 0.45em; }
+.cw-field.half { width: 48.5%; }
+.cw-send-row { margin: 0.1em 0 0; }
+.cw-send-row .cw-hint { flex-grow: 1; padding-right: 0.5em; }
+
+/* delete buttons */
+.cw-del {
+  margin-left: 0.5em; padding: 0 0.3em; border-radius: 0.3em;
+  color: var(--muted); font-size: 1.25em; line-height: 1em; cursor: pointer; opacity: 0.55;
+}
+.cw-del:hover { opacity: 1; color: var(--rose); background-color: var(--rose-soft); }
+.cw-sys .cw-del { font-size: 1.1em; }
+/* collapse */
+.cw-fold {
+  width: 0.45em; height: 0.45em; margin-left: 0.6em; margin-top: 0.2em;
+  border-left: 2px solid var(--muted); border-top: 2px solid var(--muted);
+  transform: rotate(45deg); cursor: pointer; opacity: 0.6;
+}
+.cw-fold:hover { opacity: 1; }
+.cw-msg.collapsed { padding: 0.45em 0.8em; cursor: pointer; }
+.cw-msg.collapsed .cw-fold { transform: rotate(225deg); margin-top: -0.25em; }
+.cw-msg.collapsed .cw-text {
+  margin-top: 0.2em; font-size: 0.85em; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cw-msg.collapsed .cw-var { background-color: transparent; color: inherit; padding: 0; }
+.cw-msg.collapsed .cw-actions, .cw-msg.collapsed .cw-state { display: none; }
+
+/* recently deleted */
+.cw-trash-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 0.8em; color: var(--muted);
+  border: 1px dashed var(--line); border-radius: 0.6em; padding: 0.4em 0.7em; margin: 0.2em 0 0.6em;
+}
+.cw-link { color: var(--accent); font-weight: bold; cursor: pointer; }
+.cw-trash-row {
+  display: flex; align-items: center; font-size: 0.8em;
+  background-color: var(--surface); border-radius: 0.5em; padding: 0.35em 0.6em; margin-bottom: 0.3em;
+}
+.cw-trash-text { flex-grow: 1; min-width: 0; color: var(--muted); font-family: "Consolas", monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 0.6em; }
+.cw-trash-all { text-align: right; font-size: 0.8em; margin-bottom: 0.6em; }
