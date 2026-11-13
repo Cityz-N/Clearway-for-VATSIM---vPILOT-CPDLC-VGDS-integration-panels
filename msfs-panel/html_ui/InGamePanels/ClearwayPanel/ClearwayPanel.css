@@ -371,8 +371,15 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 /* ================= v0.4 ================= */
 /* idle icon: nearly invisible when nothing is unread; full on hover */
 #cw-bubble { transition: background-color 0.3s, border-color 0.3s, transform 0.15s, opacity 0.5s; }
-#cw-bubble.idle { opacity: 0.2; }
-#cw-bubble.idle:hover { opacity: 1; }
+/* idle: very faint and colourless; colour and full opacity come back on hover */
+#cw-bubble.idle { opacity: 0.12; background-color: #3a3f48; border-color: #5a606b; box-shadow: none; }
+#cw-bubble.idle .cw-glyph { fill: #c4c8d0; }
+#cw-bubble.idle:hover { opacity: 1; background-color: var(--bubble); box-shadow: 0 0.3em 1.2em var(--shadow); }
+#cw-bubble.idle:hover .cw-glyph { fill: var(--glyph-off); }
+#cw-bubble.idle.online:hover { border-color: var(--accent); }
+#cw-bubble.idle.online:hover .cw-glyph { fill: var(--accent); }
+#cw-bubble.idle.error:hover { border-color: var(--rose); }
+#cw-bubble.idle.error:hover .cw-glyph { fill: var(--rose); }
 
 /* drawn x icon (the sim's font has no multiplication sign) */
 .cw-xi { width: 0.75em; height: 0.75em; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; fill: none; vertical-align: middle; }

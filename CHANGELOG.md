@@ -6,9 +6,11 @@
 - MSFS panel: COM1/COM2 frequencies read from the sim; the transmit frequency shows on the FREQ tab, hover for both radios (also shown on the phone)
 - Purpose labels on CPDLC messages: DCL, CLEARANCE, OCEANIC, LOGON, REQUEST, METAR/TAF/ATIS
 - MSFS panel: Enter sends; message boxes grow with long text; hints clear themselves; text 2 px smaller; bigger collapse arrows
-- MSFS panel: the floating icon fades to 20% when there is nothing to read
+- MSFS panel: the floating icon fades when there is nothing to read
 - MSFS panel: fixed symbols that showed as boxes in the sim's font (x, ..., arrows)
 - Clearance form: 'Aircraft type' label, prefilled from vPilot
+- MSFS panel: text fields (notepad, chat, requests) give the keyboard and mouse back to the sim as soon as the mouse leaves the card, on Esc, or when collapsing; previously the sim stayed blocked
+- MSFS panel: the idle icon is fainter (12%) and grey; colour comes back on hover
 - Nearby ATC: an arrow on each controller expands their information in place (no more double-click; nothing added to the frequency chat)
 - Phone: VDGS button in the vPilot tab opens the official VDGS page (vats.im/vdgs) for TOBT/TSAT and start-up times
 - Fixed: the vPilot tab kept showing 'connected' after vPilot or its plugin had closed

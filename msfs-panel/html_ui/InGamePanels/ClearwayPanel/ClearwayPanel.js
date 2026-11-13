@@ -217,6 +217,7 @@
   }
 
   function showTab(t) {
+    releaseKeyboard();
     tab = t;
     save("CLEARWAY_TAB", t);
     var tabs = el("cw-head").getElementsByClassName("cw-tab");
@@ -536,6 +537,7 @@
         "\" type=\"text\" placeholder=\"" + fd.ph + "\" value=\"" + esc(vals[fd.k] || "") + "\"/>";
     }
     var box = el("cw-fields");
+    if (keyboardOwner && keyboardOwner.indexOf("cw-f-") === 0) releaseKeyboard();
     box.innerHTML = html;
     var inputs = box.querySelectorAll("input, textarea");
     for (var j = 0; j < inputs.length; j++) wireInput(inputs[j], send);
@@ -655,6 +657,7 @@
   }
 
   function setExpanded(v) {
+    if (!v) releaseKeyboard();
     expanded = v;
     el("cw-card").classList.toggle("hidden", !expanded);
     save("CLEARWAY_EXPANDED", expanded);
@@ -692,16 +695,32 @@
     });
   }
 
-  // keep typed keys away from the sim while an input has focus
+  // While a text field has focus the sim sends the keyboard to the panel (so typing doesn't
+  // trigger sim shortcuts). Clicks outside the card go straight to the cockpit and never reach
+  // the panel, so the field would keep the keyboard forever: give it back as soon as the mouse
+  // leaves the card, on Esc, when collapsing/switching tabs, or when the field disappears.
+  var keyboardOwner = null;   // id of the field that currently holds the sim's keyboard
+  function releaseKeyboard() {
+    var a = document.activeElement;
+    if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA") && up(a, "#cw-root")) a.blur();
+    if (keyboardOwner && typeof Coherent !== "undefined") Coherent.trigger("UNFOCUS_INPUT_FIELD", keyboardOwner);
+    keyboardOwner = null;
+  }
+
   function wireInput(input, onEnter) {
     input.addEventListener("focus", function () {
+      keyboardOwner = input.id;
       if (typeof Coherent !== "undefined") Coherent.trigger("FOCUS_INPUT_FIELD", input.id, "", "", "", false);
     });
     input.addEventListener("blur", function () {
-      if (typeof Coherent !== "undefined") Coherent.trigger("UNFOCUS_INPUT_FIELD", input.id);
+      if (keyboardOwner === input.id) {
+        if (typeof Coherent !== "undefined") Coherent.trigger("UNFOCUS_INPUT_FIELD", input.id);
+        keyboardOwner = null;
+      }
     });
     var lastEnter = 0;
     function onKey(e) {
+      if (e.key === "Escape" || e.keyCode === 27) { releaseKeyboard(); e.stopPropagation(); return; }
       var isEnter = e.key === "Enter" || e.keyCode === 13 || e.which === 13;
       if (isEnter && !e.shiftKey && onEnter) {
         e.preventDefault();
@@ -734,6 +753,8 @@
 
     makeDraggable(el("cw-bubble"), function () { setExpanded(!expanded); });
     makeDraggable(el("cw-head"), null);
+    // leaving the card gives the keyboard (and mouse) back to the sim
+    el("cw-card").addEventListener("mouseleave", releaseKeyboard);
     el("cw-min").addEventListener("click", function () { setExpanded(false); });
     el("cw-head").addEventListener("click", function (e) {
       var t = up(e.target, ".cw-tab");
