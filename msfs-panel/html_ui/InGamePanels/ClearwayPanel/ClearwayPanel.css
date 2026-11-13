@@ -108,19 +108,10 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
   from { background-color: var(--bubble); transform: scale(1); }
   to { background-color: #f5b14c; transform: scale(1.18); }
 }
-#cw-count {
-  position: absolute; right: -0.25em; top: -0.25em;
-  min-width: 1.35em; height: 1.35em; border-radius: 0.7em; padding: 0 0.3em;
-  background-color: #2a1d07; color: #f5b14c; border: 1px solid #f5b14c;
-  font-size: 0.8em; font-weight: bold; line-height: 1.35em; text-align: center;
-  display: none;
-}
-#cw-bubble.alert #cw-count { display: block; }
-
 /* ---------------- card ---------------- */
 #cw-card {
   position: absolute; left: 100px; top: 200px;
-  width: 23em;
+  width: 25.8em;            /* same width as before the 2 px smaller text */
   background-color: var(--bg);
   border-radius: 1.1em;
   border: 1px solid var(--line);
@@ -168,8 +159,8 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 }
 .cw-msg.out { background-color: var(--surface-2); border-color: transparent; }
 .cw-msg.unread { background-color: var(--unread); }
-.cw-msg.unread .cw-bar { display: block; }
-.cw-bar { display: none; position: absolute; left: 0; top: 0; bottom: 0; width: 0.25em; background-color: #f5b14c; }
+.cw-msg.unread .cw-bar-l { display: block; }
+.cw-bar-l { display: none; position: absolute; left: 0; top: 0; bottom: 0; width: 0.25em; background-color: #f5b14c; }
 .cw-meta { display: flex; align-items: center; font-size: 0.78em; color: var(--muted); }
 .cw-chip {
   font-weight: bold; letter-spacing: 0.05em; padding: 0.12em 0.55em; border-radius: 1em;
@@ -239,13 +230,17 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 .cw-sys .cw-del { font-size: 1.1em; }
 /* collapse */
 .cw-fold {
-  width: 0.45em; height: 0.45em; margin-left: 0.6em; margin-top: 0.2em;
-  border-left: 2px solid var(--muted); border-top: 2px solid var(--muted);
-  transform: rotate(45deg); cursor: pointer; opacity: 0.6;
+  /* sizes are relative to the small header text (0.78em) */
+  position: relative; width: 2.2em; height: 1.9em; flex-shrink: 0; margin-left: 0.3em; border-radius: 0.45em; cursor: pointer;
 }
-.cw-fold:hover { opacity: 1; }
+.cw-fold::after {
+  content: ""; position: absolute; left: 0.68em; top: 0.8em; width: 0.8em; height: 0.8em;
+  border-left: 2.5px solid var(--muted); border-top: 2.5px solid var(--muted); transform: rotate(45deg);
+}
+.cw-fold:hover { background-color: var(--surface-2); }
+.cw-fold:hover::after { border-color: var(--text); }
 .cw-msg.collapsed { padding: 0.45em 0.8em; cursor: pointer; }
-.cw-msg.collapsed .cw-fold { transform: rotate(225deg); margin-top: -0.25em; }
+.cw-msg.collapsed .cw-fold::after { transform: rotate(225deg); top: 0.32em; }
 .cw-msg.collapsed .cw-text {
   margin-top: 0.2em; font-size: 0.85em; color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -267,3 +262,160 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 .cw-trash-text { flex-grow: 1; min-width: 0; color: var(--muted); font-family: "Consolas", monospace;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 0.6em; }
 .cw-trash-all { text-align: right; font-size: 0.8em; margin-bottom: 0.6em; }
+/* vPilot message kinds */
+.cw-chip.pm { background-color: var(--mint-soft); color: var(--mint); }
+.cw-chip.radio, .cw-chip.selcal { background-color: var(--amber-soft); color: var(--amber); }
+.cw-chip.broadcast { background-color: var(--rose-soft); color: var(--rose); }
+.cw-input.plain { text-transform: none; font-family: "Roboto", "Segoe UI", sans-serif; }
+/* ================= v0.3: two tabs ================= */
+#cw-root { --vp: #00d8d4; --vp-soft: rgba(0, 216, 212, 0.16); --cp: #f5b14c; }
+#cw-root.light { --vp: #00a8a5; --vp-soft: rgba(0, 168, 165, 0.12); }
+
+/* bubble: cyan when only vPilot messages wait, amber when CPDLC waits */
+#cw-bubble.alert-vp { background-color: #00d8d4; border-color: #7ff0ee; }
+#cw-bubble.alert-vp .cw-glyph { fill: #032423; }
+#cw-bubble.flash-vp { animation: cw-flash-vp 0.45s ease-in-out 6 alternate; }
+@keyframes cw-flash-vp {
+  from { background-color: var(--bubble); transform: scale(1); }
+  to { background-color: #00d8d4; transform: scale(1.18); }
+}
+.cw-ndot {
+  position: absolute; top: -0.3em; min-width: 1.35em; height: 1.35em; border-radius: 0.7em; padding: 0 0.3em;
+  font-size: 0.8em; font-weight: bold; line-height: 1.35em; text-align: center;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+}
+.cw-ndot.vp { left: -0.35em; background-color: #00d8d4; color: #032423; }
+.cw-ndot.cp { right: -0.35em; background-color: #f5b14c; color: #2a1d07; }
+
+/* header tabs */
+.cw-tabs { display: flex; flex-grow: 1; }
+.cw-tab {
+  display: flex; align-items: center; padding: 0.35em 0.8em; margin-right: 0.3em; border-radius: 0.6em;
+  font-weight: bold; font-size: 0.95em; color: var(--muted); cursor: pointer;
+}
+.cw-tab:hover { background-color: var(--surface-2); }
+.cw-tab.on { background-color: var(--surface-2); color: var(--text); }
+.cw-tab[data-tab="vpilot"].on { color: var(--vp); }
+.cw-tdot {
+  margin-left: 0.4em; min-width: 1.3em; height: 1.3em; border-radius: 0.65em; padding: 0 0.3em;
+  font-size: 0.75em; line-height: 1.3em; text-align: center; font-weight: bold;
+}
+.cw-tdot.vp { background-color: #00d8d4; color: #032423; }
+.cw-tdot.cp { background-color: #f5b14c; color: #2a1d07; }
+.cw-icon-btn.on { background-color: var(--surface-2); }
+.cw-icon-btn.on svg { stroke: var(--text); }
+
+/* pane bar (status line under the tabs) */
+.cw-bar { display: flex; align-items: center; padding: 0.55em 0.8em; border-bottom: 1px solid var(--line); background-color: var(--surface); }
+.cw-bar-title { flex-grow: 1; font-family: "Consolas", monospace; font-weight: bold; font-size: 0.92em; }
+.cw-mini {
+  margin-left: 0.3em; padding: 0.3em 0.55em; border-radius: 0.5em; background-color: var(--surface-2);
+  font-size: 0.78em; font-weight: bold; color: var(--muted); cursor: pointer;
+}
+.cw-mini.wide { padding: 0.3em 0.7em; }
+.cw-mini.on { background-color: var(--mint-soft); color: var(--mint); }
+.cw-mini.danger { background-color: var(--rose-soft); color: var(--rose); }
+.cw-mini.disabled { opacity: 0.4; }
+.cw-vp-connect { padding: 0.6em 0.8em 0.2em; background-color: var(--surface); border-bottom: 1px solid var(--line); }
+.cw-field.third { width: 32%; }
+.cw-btn.full { display: block; text-align: center; margin: 0 0 0.5em; }
+
+/* chat tabs */
+.cw-chips { display: flex; flex-wrap: wrap; padding: 0.5em 0.8em 0.1em; }
+.cw-chip-tab {
+  display: flex; align-items: center; padding: 0.25em 0.65em; margin: 0 0.35em 0.35em 0; border-radius: 1em;
+  background-color: var(--surface); color: var(--muted); font-family: "Consolas", monospace; font-size: 0.8em; font-weight: bold; cursor: pointer;
+}
+.cw-chip-tab.on { background-color: var(--vp-soft); color: var(--vp); }
+.cw-chip-tab.atc { margin-left: auto; }
+.cw-chip-x { margin-left: 0.45em; opacity: 0.55; font-size: 1.15em; }
+.cw-chip-x:hover { opacity: 1; color: var(--rose); }
+
+/* chat */
+.cw-chat { max-height: 20em; }
+.cw-vmsg {
+  max-width: 88%; margin-bottom: 0.45em; padding: 0.45em 0.65em; border-radius: 0.8em 0.8em 0.8em 0.25em;
+  background-color: var(--surface); border: 1px solid var(--line);
+}
+.cw-vmsg.out { margin-left: auto; background-color: var(--vp-soft); border-color: transparent; border-radius: 0.8em 0.8em 0.25em 0.8em; }
+.cw-vmsg.mention { border-color: var(--vp); }
+.cw-vmsg.unread { border-left: 0.25em solid #00d8d4; }
+.cw-vtext { margin-top: 0.2em; font-size: 0.95em; line-height: 1.35em; }
+.cw-freq { font-family: "Consolas", monospace; color: var(--vp); margin: 0 0.4em; }
+.cw-vinfo { margin-bottom: 0.45em; padding: 0.45em 0.65em; border-radius: 0.7em; background-color: var(--mint-soft); }
+.cw-pre { margin-top: 0.2em; font-family: "Consolas", monospace; font-size: 0.85em; color: var(--mint); white-space: pre-wrap; }
+.cw-valert { margin-bottom: 0.45em; padding: 0.4em 0.65em; border-radius: 0.7em; font-size: 0.88em; }
+.cw-valert.selcal { background-color: var(--amber-soft); color: var(--amber); }
+.cw-valert.broadcast { background-color: var(--rose-soft); color: var(--rose); }
+
+/* nearby ATC */
+.cw-atc-row { display: flex; align-items: center; padding: 0.4em 0.2em; border-bottom: 1px solid var(--line); cursor: pointer; }
+.cw-atc-row:hover { background-color: var(--surface); }
+.cw-atc-cs { flex-grow: 1; font-family: "Consolas", monospace; font-weight: bold; font-size: 0.88em; }
+.cw-atc-d { width: 4.5em; text-align: right; color: var(--muted); font-size: 0.8em; margin-right: 0.6em; }
+.cw-atc-hint { padding: 0.5em 0.2em; }
+
+/* composer */
+.cw-compose { padding: 0.5em 0.8em 0.6em; border-top: 1px solid var(--line); background-color: var(--surface); }
+.cw-compose .cw-row { margin-bottom: 0.2em; }
+
+/* notepad */
+#cw-notes { padding: 0.7em 0.8em; }
+.cw-notes {
+  width: 100%; height: 22em; resize: none; border: 1px solid var(--line); border-radius: 0.6em;
+  background-color: var(--bg); color: var(--text); padding: 0.6em 0.7em;
+  font-family: "Consolas", monospace; font-size: 0.95em; line-height: 1.45em;
+}
+.cw-notes:focus { border-color: var(--accent); }
+
+/* ================= v0.4 ================= */
+/* idle icon: nearly invisible when nothing is unread; full on hover */
+#cw-bubble { transition: background-color 0.3s, border-color 0.3s, transform 0.15s, opacity 0.5s; }
+#cw-bubble.idle { opacity: 0.2; }
+#cw-bubble.idle:hover { opacity: 1; }
+
+/* drawn x icon (the sim's font has no multiplication sign) */
+.cw-xi { width: 0.75em; height: 0.75em; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; fill: none; vertical-align: middle; }
+.cw-del, .cw-chip-x { display: inline-flex; align-items: center; justify-content: center; }
+.cw-del { padding: 0.25em; font-size: 1em; }
+
+/* growing message boxes */
+textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-height: 2.35em; white-space: pre-wrap; }
+
+/* COM radios */
+.cw-pane { position: relative; }
+.cw-chip-freq { color: var(--vp); margin-left: 0.15em; }
+.cw-com-pop {
+  position: absolute; z-index: 5; padding: 0.5em 0.7em; border-radius: 0.6em;
+  background-color: var(--surface); border: 1px solid var(--line); box-shadow: 0 0.4em 1.4em var(--shadow);
+  font-size: 0.85em;
+}
+.cw-com-row { display: flex; align-items: center; padding: 0.15em 0; white-space: nowrap; }
+.cw-com-row b { width: 3.2em; font-family: "Consolas", monospace; }
+.cw-com-stby { color: var(--muted); font-family: "Consolas", monospace; margin-left: 0.4em; }
+.cw-com-tx { margin-left: 0.6em; padding: 0 0.4em; border-radius: 0.4em; background-color: var(--mint-soft); color: var(--mint); font-weight: bold; font-size: 0.85em; }
+
+/* purpose labels */
+.cw-chip.tag-DCL, .cw-chip.tag-CLEARANCE { background-color: var(--mint-soft); color: var(--mint); }
+.cw-chip.tag-OCEANIC { background-color: rgba(84, 160, 255, 0.16); color: #6fb1ff; }
+.cw-chip.tag-LOGON { background-color: var(--surface-2); color: var(--text); }
+.cw-chip.tag-REQUEST { background-color: var(--accent-soft); color: var(--accent); }
+.cw-chip.tag-METAR, .cw-chip.tag-TAF, .cw-chip.tag-ATIS { background-color: var(--lav-soft); color: var(--lav); }
+
+/* nearby ATC: arrow expands the controller's information in place */
+.cw-atc-item { border-bottom: 1px solid var(--line); }
+.cw-atc-item .cw-atc-row { border-bottom: 0; }
+.cw-atc-arrow {
+  position: relative; width: 1.4em; height: 1.4em; flex-shrink: 0; margin-right: 0.35em; border-radius: 0.4em;
+}
+.cw-atc-arrow::after {
+  content: ""; position: absolute; left: 0.38em; top: 0.48em; width: 0.45em; height: 0.45em;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg);
+}
+.cw-atc-item.open .cw-atc-arrow::after { transform: rotate(45deg); left: 0.47em; top: 0.33em; }
+.cw-atc-row:hover .cw-atc-arrow { background-color: var(--surface-2); }
+.cw-atc-info {
+  margin: 0 0.2em 0.5em 1.95em; padding: 0.45em 0.6em; border-radius: 0.5em;
+  background-color: var(--mint-soft); color: var(--mint);
+  font-family: "Consolas", monospace; font-size: 0.8em; line-height: 1.4em; white-space: pre-wrap;
+}

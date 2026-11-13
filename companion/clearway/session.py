@@ -15,11 +15,13 @@ from datetime import datetime, timezone
 from . import notify, vatsim
 from .config import Config
 from .hoppie import HoppieClient, HoppieError, Incoming, build_cpdlc, parse_cpdlc
+from .tags import classify
+from .vpilot import FREQ, VP_KINDS, VpilotMixin
 
 log = logging.getLogger("clearway.session")
 
-MAX_MESSAGES = 300
-PANEL_TIMEOUT = 12          # seconds without a panel heartbeat before it counts as closed
+MAX_MESSAGES = 300          # kept per category (CPDLC and vPilot chat separately)
+PANEL_TIMEOUT = 12           # seconds without a panel heartbeat before it counts as closed
 FAST_POLL_SECONDS = 180     # poll every 20 s for this long after sending a request
 UNIT_RE = re.compile(r"_@([A-Z0-9_]+)@_")
 
@@ -41,7 +43,7 @@ def reply_options(msg: dict) -> list[str]:
     return []
 
 
-class Session:
+class Session(VpilotMixin):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.lock = threading.RLock()
@@ -64,9 +66,11 @@ class Session:
         self.panel_seen = 0.0
         self.fast_until = 0.0
         self.base_url = ""                      # http://<lan-ip>:<port>, set by the server
+        self._vp_init()
         self._client: HoppieClient | None = None
         self._stop = threading.Event()
         self._wake = threading.Event()
+        self.notes = self._load_notes()
         threading.Thread(target=self._adsc_loop, daemon=True).start()
 
     # ------------------------------------------------------------ helpers
@@ -89,15 +93,27 @@ class Session:
                 "collapsed": False,
             }
             msg.update(extra)
+            if msg["kind"] not in VP_KINDS and direction != "sys":
+                parent = self._find(msg["linked"]) if msg.get("linked") else None
+                if parent is None and msg["kind"] == "info" and direction == "in":
+                    parent = next((m for m in reversed(self.messages) if m["kind"] == "info" and m["dir"] == "out"), None)
+                msg["tag"] = classify(msg, parent)
             self._next_id += 1
             self.messages.append(msg)
-            del self.messages[:-MAX_MESSAGES]
+            is_vp = msg["kind"] in VP_KINDS
+            same = [m for m in self.messages if (m["kind"] in VP_KINDS) == is_vp]
+            if len(same) > MAX_MESSAGES:
+                drop = {id(m) for m in same[:len(same) - MAX_MESSAGES]}
+                self.messages = [m for m in self.messages if id(m) not in drop]
             self._bump()
             return msg
 
-    def _system(self, text: str) -> None:
+    def _system(self, text: str, vp: bool = False) -> None:
         log.info(text)
-        self._add("sys", "system", "SYSTEM", text)
+        if vp:
+            self._add("sys", "vsys", "VPILOT", text, chat=FREQ)
+        else:
+            self._add("sys", "system", "SYSTEM", text)
 
     def _take_min(self) -> int:
         with self.lock:
@@ -135,6 +151,8 @@ class Session:
         logon = self.cfg.get("hoppie_logon")
         cid = str(self.cfg.get("vatsim_cid") or "").strip()
         override = (self.cfg.get("callsign_override") or "").strip().upper()
+        if not override and self.vpilot_connected and self.vpilot_callsign:
+            override = self.vpilot_callsign        # vPilot knows the callsign before the VATSIM feed does
         if not logon:
             return self._fail("Enter your Hoppie logon code in Settings first.")
         if not cid and not override:
@@ -406,21 +424,23 @@ class Session:
                     pass
 
     # ------------------------------------------------------------ notifications
-    def _notify(self, msg: dict) -> None:
+    def _notify(self, msg: dict, priority: int | None = None) -> None:
         if not self.cfg.get("ntfy_enabled") or not self.cfg.get("ntfy_topic"):
             return
         if self.cfg.get("mute_phone_when_panel_open") and self.panel_active():
             return
         key = self.cfg.get("pair_key")
-        title = {"cpdlc": "CPDLC", "telex": "Telex", "info": "Info"}.get(msg["kind"], "Message")
+        title = {"cpdlc": "CPDLC", "telex": "Telex", "info": "Info", "pm": "Message", "radio": "Frequency",
+                 "broadcast": "Broadcast", "selcal": "SELCAL"}.get(msg["kind"], "Message")
         options = reply_options(msg)
         actions = [notify.quick_action(o, self.base_url, key, msg["id"], o) for o in options] if self.base_url else None
         click = f"{self.base_url}/?k={key}#m{msg['id']}" if self.base_url else None
         notify.publish(
             self.cfg.get("ntfy_server"), self.cfg.get("ntfy_topic"),
             f"{title} · {msg['station']}", msg["text"] or "(empty message)",
-            priority=5 if options else 4,
-            tags=["airplane"] if msg["kind"] == "cpdlc" else ["envelope"],
+            priority=priority or (5 if options else 4),
+            tags={"cpdlc": ["airplane"], "selcal": ["bell"], "broadcast": ["loudspeaker"],
+                  "radio": ["radio"]}.get(msg["kind"], ["envelope"]),
             click=click, actions=actions,
         )
 
@@ -436,6 +456,11 @@ class Session:
             raise ValueError("Not connected. Press Connect first.")
 
     def reply(self, msg_id: int, text: str) -> None:
+        with self.lock:
+            target = self._find(msg_id)
+        if target and target["dir"] == "in" and target["kind"] in ("pm", "radio"):
+            # vPilot messages: plain text, any case, no Hoppie connection needed
+            return self.send_text(target["kind"], target["station"], text, ack_id=msg_id)
         self._require_online()
         text = text.strip().upper()
         if not text:
@@ -455,10 +480,21 @@ class Session:
             msg["acked"] = True
             self._bump()
 
-    def ack(self, msg_id: int | None = None) -> None:
+    def ack(self, msg_id: int | None = None, chat: str | None = None, scope: str | None = None) -> None:
+        """Mark messages read: one message, a vPilot chat, a whole tab ("cpdlc"/"vpilot") or everything."""
         with self.lock:
             for m in self.messages:
-                if msg_id is None or m["id"] == msg_id:
+                if msg_id is not None:
+                    hit = m["id"] == msg_id
+                elif chat is not None:
+                    hit = m.get("chat") == chat and m["kind"] in VP_KINDS
+                elif scope == "vpilot":
+                    hit = m["kind"] in VP_KINDS
+                elif scope == "cpdlc":
+                    hit = m["kind"] not in VP_KINDS
+                else:
+                    hit = True
+                if hit:
                     m["acked"] = True
             self._bump()
 
@@ -478,7 +514,7 @@ class Session:
     def clear_history(self) -> None:
         """Delete everything except messages still waiting for an answer (restorable)."""
         with self.lock:
-            keep = lambda m: m["dir"] == "in" and m["status"] in ("open", "standby")  # noqa: E731
+            keep = lambda m: m["kind"] in VP_KINDS or (m["dir"] == "in" and m["status"] in ("open", "standby"))  # noqa: E731
             self._to_trash([m for m in self.messages if not keep(m)])
             self.messages = [m for m in self.messages if keep(m)]
             self._bump()
@@ -566,6 +602,27 @@ class Session:
         label = "ATIS" if what == "vatatis" else what.upper()
         self._send_logged("SERVER", "inforeq", f"{what} {icao}", "info", f"{label} {icao}")
 
+    # ------------------------------------------------------------ notepad
+    def _notes_path(self):
+        from .config import data_dir
+        return data_dir() / "notes.txt"
+
+    def _load_notes(self) -> str:
+        try:
+            return self._notes_path().read_text(encoding="utf-8")
+        except OSError:
+            return ""
+
+    def save_notes(self, text: str) -> None:
+        text = str(text)[:50_000]
+        with self.lock:
+            self.notes = text
+            self._bump()
+        try:
+            self._notes_path().write_text(text, encoding="utf-8")
+        except OSError as exc:
+            log.warning("Couldn't save notes: %s", exc)
+
     # ------------------------------------------------------------ snapshot
     def snapshot(self) -> dict:
         with self.lock:
@@ -574,7 +631,9 @@ class Session:
                 item = dict(m)
                 item["options"] = reply_options(m)
                 msgs.append(item)
-            unacked = sum(1 for m in self.messages if m["dir"] == "in" and not m["acked"])
+            unacked_vp = sum(1 for m in self.messages if m["dir"] == "in" and not m["acked"] and m["kind"] in VP_KINDS)
+            unacked_cpdlc = sum(1 for m in self.messages if m["dir"] == "in" and not m["acked"] and m["kind"] not in VP_KINDS)
+            unacked = unacked_vp + unacked_cpdlc
             return {
                 "version": self.version,
                 "status": self.status,
@@ -589,9 +648,13 @@ class Session:
                 "position_source": self.position["source"] if self.position else None,
                 "panel_active": self.panel_active(),
                 "unacked": unacked,
+                "unacked_vpilot": unacked_vp,
+                "unacked_cpdlc": unacked_cpdlc,
+                "notes": self.notes,
                 "messages": msgs,
                 "trash": [{k: m.get(k) for k in ("id", "ts", "dir", "kind", "station", "text")}
                           for m in reversed(self.trash) if m["dir"] != "sys"],
                 "settings": self.cfg.public(),
                 "base_url": self.base_url,
+                "vpilot": self.vpilot_snapshot(),
             }

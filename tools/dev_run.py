@@ -22,6 +22,8 @@ cfg.update({
     "callsign_override": cfg.get("callsign_override") or "BAW117",
     "hoppie_url": "http://127.0.0.1:8790/connect.html",
     "ntfy_enabled": False,
+    # a separate port, so a real vPilot/Clearway plugin on 8787 never talks to the test server
+    "port": 8797,
     "open_browser_on_start": False,
 })
 cfg_file.write_text(json.dumps(cfg, indent=2))

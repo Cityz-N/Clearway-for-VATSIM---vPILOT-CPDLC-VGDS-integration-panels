@@ -39,7 +39,51 @@
 
   <main>
     <!-- Messages -->
+    <!-- vPilot -->
+    <section class="view vp-view" id="view-vpilot" hidden>
+      <div class="vp-status card">
+        <div class="vp-status-row">
+          <span class="dot" id="vpStateDot"></span>
+          <div class="vp-who"><b id="vpWho">vPilot</b><span class="muted small-text" id="vpWhoSub"></span><span class="vp-com small-text" id="vpCom"></span></div>
+          <button class="primary small-btn" id="vpConnectBtn">Connect</button>
+        </div>
+        <div class="vp-connect hidden-block" id="vpConnectForm">
+          <div class="grid3">
+            <input id="vpCs" class="mono" placeholder="Callsign" autocapitalize="characters">
+            <input id="vpType" class="mono" placeholder="Type (B77W)" autocapitalize="characters">
+            <input id="vpSelcal" class="mono" placeholder="SELCAL" autocapitalize="characters">
+          </div>
+          <button class="primary wide" id="vpConnectGo">Connect to VATSIM</button>
+        </div>
+        <div class="vp-xpdr">
+          <div class="seg xpdr" id="vpXpdr"><button data-v="sby">Standby</button><button data-v="c">Mode C</button></div>
+          <button class="ghost" id="vpIdent">Ident</button>
+          <button class="ghost" id="vpAtcBtn">Nearby ATC <span class="muted" id="vpAtcCount"></span></button>
+          <!-- official VDGS / CDM page (TOBT, TSAT, start-up window); opens in Safari for the VATSIM login -->
+          <a class="ghost vdgs-link" id="vpVdgs" href="https://vats.im/vdgs" target="_blank" rel="noopener">VDGS
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+        </div>
+      </div>
+      <div class="vp-atc card" id="vpAtc" hidden>
+        <div class="vp-atc-head"><b>Nearby ATC</b><span class="muted small-text">Tap a controller for their information</span></div>
+        <div id="vpAtcList"></div>
+      </div>
+      <div class="vp-tabs" id="vpTabs"></div>
+      <div class="vp-chat" id="vpChat"></div>
+      <form class="vp-composer" id="vpComposer" autocomplete="off">
+        <textarea id="vpInput" rows="1" placeholder="Message, or a .command" enterkeyhint="send"></textarea>
+        <button class="primary" type="submit">Send</button>
+      </form>
+    </section>
+
+    <!-- Notepad -->
+    <section class="view" id="view-notes" hidden>
+      <div class="view-head"><h1>Notes</h1><span class="muted small-text" id="notesState"></span></div>
+      <textarea id="notesText" class="notes" placeholder="Frequencies, clearances, squawk codes, anything you want to keep handy…"></textarea>
+    </section>
+
     <section class="view" id="view-messages">
+      <div class="seg subseg"><button class="on" data-sub="messages">Messages</button><button data-sub="request">Requests</button></div>
       <div class="view-head">
         <h1>Messages</h1>
         <div class="head-actions">
@@ -60,6 +104,7 @@
 
     <!-- Requests -->
     <section class="view" id="view-request" hidden>
+      <div class="seg subseg"><button data-sub="messages">Messages</button><button class="on" data-sub="request">Requests</button></div>
       <div class="view-head"><h1>Requests</h1></div>
 
       <details class="card acc" open>
@@ -137,7 +182,7 @@
         <div class="acc-body">
           <div class="grid2">
             <label>Station<input id="pdcStation" class="mono" placeholder="e.g. EGLL" autocapitalize="characters"></label>
-            <label>Aircraft<input id="pdcType" class="mono" placeholder="B77W" autocapitalize="characters"></label>
+            <label>Aircraft type<input id="pdcType" class="mono" placeholder="B77W" autocapitalize="characters"></label>
             <label>From<input id="pdcDep" class="mono" placeholder="EGLL" autocapitalize="characters"></label>
             <label>To<input id="pdcArr" class="mono" placeholder="KJFK" autocapitalize="characters"></label>
             <label>Stand<input id="pdcStand" class="mono" placeholder="512" autocapitalize="characters"></label>
@@ -172,8 +217,19 @@
       </details>
 
       <details class="card acc">
-        <summary><span>Weather &amp; ATIS</span></summary>
+        <summary><span>Text message <span class="muted">(vPilot)</span></span><span class="sum-note" id="vtextNote"></span></summary>
         <div class="acc-body">
+          <div class="seg" id="textKind">
+            <button class="on" data-v="pm">Private</button><button data-v="radio">On frequency</button>
+          </div>
+          <input id="vTo" class="mono" placeholder="To (callsign), e.g. EGLL_TWR" autocapitalize="characters">
+          <textarea id="vText" rows="3" placeholder="Message" style="margin-top:10px"></textarea>
+          <button class="primary wide" data-send="vtext">Send</button>
+        </div>
+      </details>
+
+      <details class="card acc">
+        <summary><span>Weather &amp; ATIS</span></summary>        <div class="acc-body">
           <div class="seg" id="wxKind">
             <button class="on" data-v="metar">METAR</button><button data-v="taf">TAF</button><button data-v="vatatis">ATIS</button>
           </div>
@@ -238,8 +294,15 @@
       </div>
 
       <div class="card">
-        <h2>Options</h2>
-        <div class="toggle-row"><span>Answer ADS-C position requests automatically</span><label class="switch"><input type="checkbox" id="setAdsc"><i></i></label></div>
+        <h2>vPilot</h2>
+        <div class="toggle-row"><span><span class="dot" id="vpDot" style="display:inline-block;margin-right:8px;vertical-align:middle"></span><span id="vpStatus" class="small-text"></span></span></div>
+        <div class="toggle-row"><span>Connect to Hoppie automatically when vPilot connects</span><label class="switch"><input type="checkbox" id="setVpAuto"><i></i></label></div>
+        <div class="toggle-row"><span>Alert me for all frequency text <span class="muted">(otherwise only messages that mention you)</span></span><label class="switch"><input type="checkbox" id="setVpAll"><i></i></label></div>
+        <p class="muted small-text">Private messages, frequency text that mentions you, broadcasts and SELCAL alerts from vPilot appear here and on your phone. To install, copy <code>Clearway.vPilot.dll</code> into vPilot's <code>Plugins</code> folder and restart vPilot.</p>
+      </div>
+
+      <div class="card">
+        <h2>Options</h2>        <div class="toggle-row"><span>Answer ADS-C position requests automatically</span><label class="switch"><input type="checkbox" id="setAdsc"><i></i></label></div>
         <div class="toggle-row"><span>Light theme <span class="muted">(phone, PC and MSFS panel)</span></span><label class="switch"><input type="checkbox" id="setLight"><i></i></label></div>
         <div class="toggle-row"><span>Open this page when Clearway starts <span class="muted">(otherwise double-click the tray icon)</span></span><label class="switch"><input type="checkbox" id="setBrowser"><i></i></label></div>
       </div>
@@ -249,13 +312,17 @@
   </main>
 
   <nav class="tabbar">
-    <button class="tab on" data-view="messages">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
-      <span>Messages</span><b class="badge" id="badge" hidden></b>
+    <button class="tab" data-view="vpilot">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4"/><circle cx="12" cy="12" r="2"/></svg>
+      <span>vPilot</span><b class="badge vp" id="vpBadge" hidden></b>
     </button>
-    <button class="tab" data-view="request">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
-      <span>Requests</span>
+    <button class="tab" data-view="cpdlc">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+      <span>CPDLC</span><b class="badge" id="badge" hidden></b>
+    </button>
+    <button class="tab" data-view="notes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>
+      <span>Notes</span>
     </button>
     <button class="tab" data-view="settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -277,5 +344,6 @@
 
   <script src="vendor/qrcode.js"></script>
   <script src="app.js"></script>
+  <script src="vp.js"></script>
 </body>
 </html>

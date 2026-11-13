@@ -23,6 +23,8 @@
     history.replaceState(null, "", `${location.pathname}?k=${encodeURIComponent(key)}${location.hash}`);
   }
 
+  const VP = new Set(["pm", "radio", "broadcast", "selcal", "vinfo", "vsys"]);   // vPilot tab
+  const KIND_LABEL = { cpdlc: "CPDLC", telex: "Telex", info: "Info", pm: "Message", radio: "Freq", broadcast: "Broadcast", selcal: "SELCAL" };
   let state = null;
   let version = 0;
   let firstLoad = true;
@@ -98,19 +100,22 @@
     else if (s.pending_logon) { pill.hidden = false; pill.className = "pill pending"; pill.textContent = s.pending_logon + "…"; }
     else pill.hidden = true;
 
-    $("badge").hidden = !s.unacked;
-    $("badge").textContent = s.unacked;
+    $("badge").hidden = !s.unacked_cpdlc;
+    $("badge").textContent = s.unacked_cpdlc;
+    $("vpBadge").hidden = !s.unacked_vpilot;
+    $("vpBadge").textContent = s.unacked_vpilot;
     document.title = s.unacked ? `(${s.unacked}) Clearway` : "Clearway";
 
     renderMessages();
     renderRequests();
     renderSettings();
+    hooks.forEach((h) => { try { h(s, firstLoad); } catch (e) { console.error(e); } });
     firstLoad = false;
   }
 
   function renderMessages() {
     const list = $("messageList");
-    const msgs = state.messages.slice().reverse();
+    const msgs = state.messages.filter((m) => !VP.has(m.kind)).slice().reverse();
     $("emptyState").hidden = msgs.length > 0;
     $("emptyHint").textContent = state.status === "online"
       ? (state.current_unit ? `Logged on to ${state.current_unit}. Messages will appear here.` : "Connected. Log on to an ATC station from Requests.")
@@ -119,13 +124,13 @@
     list.innerHTML = msgs.map((m) => {
       if (m.dir === "sys") return `<div class="sys">${esc(m.text)} · ${utc(m.ts)} <button class="del" data-del="${m.id}" aria-label="Delete">×</button></div>`;
       const unread = m.dir === "in" && !m.acked;
-      const label = m.kind === "cpdlc" ? "CPDLC" : m.kind === "telex" ? "Telex" : "Info";
+      const label = m.tag || KIND_LABEL[m.kind] || "Info";
       const arrow = m.dir === "out" ? "To" : "From";
       let foot = "";
-      if (m.options.length || (m.dir === "in" && m.status !== "closed" && (m.kind === "cpdlc" || m.kind === "telex"))) {
+      if (m.options.length || (m.dir === "in" && m.status !== "closed" && ["cpdlc", "telex", "pm", "radio"].includes(m.kind))) {
         foot += m.options.map((o) => `<button class="reply ${o}" data-reply="${o}" data-id="${m.id}">${o}</button>`).join("");
         if (m.kind === "cpdlc" && (m.status === "open" || m.status === "standby")) foot += `<button class="reply" data-free="${m.id}">Free text</button>`;
-        if (m.kind === "telex") foot += `<button class="reply" data-free="${m.id}">Reply</button>`;
+        if (["telex", "pm", "radio"].includes(m.kind)) foot += `<button class="reply" data-free="${m.id}">Reply</button>`;
       }
       if (unread && !m.options.length) foot += `<button class="reply" data-ack="${m.id}">Got it</button>`;
       let st = "";
@@ -133,9 +138,11 @@
       if (m.dir === "in" && m.status === "standby") st = `<b>STANDBY</b> sent, answer when ready`;
       if (m.dir === "out" && m.status === "awaiting") st = "Awaiting reply…";
       if (m.dir === "out" && m.status === "answered") st = `ATC replied <b>${esc(m.reply.replace(/@/g, ""))}</b>`;
-      if (m.dir === "out" && m.status === "failed") st = `<span style="color:var(--rose)">Not delivered</span>`;
+      if (m.dir === "out" && m.status === "failed") st = `<span style="color:var(--rose)">Not delivered${m.error ? ": " + esc(m.error) : ""}</span>`;
+      if (m.dir === "out" && m.status === "sending") st = "Sending through vPilot…";
+      if (m.kind === "radio" && m.freq) st = (st ? st + " · " : "") + `on ${esc(m.freq)}`;
       return `<article class="msg ${m.dir} ${unread ? "unread" : ""} ${m.collapsed ? "collapsed" : ""}" id="m${m.id}" data-msg="${m.id}">
-        <div class="msg-head"><span class="chip ${m.kind}">${label}</span><span>${arrow}</span><span class="msg-station">${esc(m.station)}</span><span class="msg-time">${utc(m.ts)}</span><button class="fold" data-fold="${m.id}" aria-label="${m.collapsed ? "Expand" : "Collapse"}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button><button class="del" data-del="${m.id}" aria-label="Delete">×</button></div>
+        <div class="msg-head"><span class="chip ${m.kind} tag-${label}">${label}</span><span>${arrow}</span><span class="msg-station">${esc(m.station)}</span><span class="msg-time">${utc(m.ts)}</span><button class="fold" data-fold="${m.id}" aria-label="${m.collapsed ? "Expand" : "Collapse"}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button><button class="del" data-del="${m.id}" aria-label="Delete">×</button></div>
         <div class="msg-text">${fmt(m.text)}</div>
         ${st || foot ? `<div class="msg-foot">${st ? `<span class="state">${st}</span>` : ""}${foot}</div>` : ""}
       </article>`;
@@ -167,7 +174,7 @@
       <button class="ghost small" data-toggle>${trashOpen ? "Hide" : "Show"}</button></div>`;
     if (trashOpen) {
       html += `<div class="trash-list">` + t.map((m) => `<div class="trash-row">
-          <span class="chip ${m.kind}">${m.kind === "cpdlc" ? "CPDLC" : m.kind === "telex" ? "Telex" : "Info"}</span>
+          <span class="chip ${m.kind}">${KIND_LABEL[m.kind] || "Info"}</span>
           <span class="trash-text mono">${esc((m.dir === "out" ? "→ " : "") + m.station + " · " + m.text.replace(/@/g, ""))}</span>
           <button class="ghost small" data-restore="${m.id}">Restore</button></div>`).join("") +
         `<button class="ghost wide" data-restore-all>Restore all</button></div>`;
@@ -181,7 +188,7 @@
     $("logoffBtn").hidden = !(s.current_unit || s.pending_logon);
     const f = s.flight || {};
     const fill = (id, v) => { const el = $(id); if (el && !el.value && v) el.value = v; };
-    fill("pdcType", f.aircraft); fill("pdcDep", f.departure); fill("pdcArr", f.arrival); fill("pdcStation", f.departure);
+    fill("pdcType", (s.vpilot && s.vpilot.last && s.vpilot.last.type) || f.aircraft); fill("pdcDep", f.departure); fill("pdcArr", f.arrival); fill("pdcStation", f.departure);
     fill("ocnLevel", (f.cruise || "").replace(/^FL/i, "").slice(0, 3));
   }
 
@@ -220,6 +227,13 @@
     $("setMute").checked = st.mute_phone_when_panel_open;
     $("setAdsc").checked = st.adsc_enabled;
     $("setBrowser").checked = st.open_browser_on_start;
+    $("setVpAuto").checked = st.vpilot_auto_connect;
+    $("setVpAll").checked = st.vpilot_all_frequency;
+    const vp = s.vpilot || {};
+    $("vpStatus").textContent = !vp.active ? "Plugin not detected. Install it and restart vPilot."
+      : vp.connected ? `Plugin running · vPilot connected as ${vp.callsign}` : "Plugin running · vPilot not connected to VATSIM";
+    $("vpDot").className = "dot " + (!vp.active ? "" : vp.connected ? "online" : "connecting");
+    $("vtextNote").textContent = vp.active && vp.connected ? `As ${vp.callsign}` : "vPilot offline";
     $("topic").textContent = st.ntfy_topic;
     $("panelState").textContent = s.panel_active ? "(panel open now)" : "";
 
@@ -246,10 +260,23 @@
   }
 
   // ---------- events ----------
-  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("on", x === t));
-    document.querySelectorAll(".view").forEach((v) => (v.hidden = v.id !== "view-" + t.dataset.view));
+  // Main tabs: vPilot | CPDLC | Notes | Settings. CPDLC has two sub-views: Messages and Requests.
+  let cpdlcSub = "messages";
+  function showView(tab) {
+    const view = tab === "cpdlc" ? cpdlcSub : tab;
+    document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("on", x.dataset.view === tab));
+    document.querySelectorAll(".view").forEach((v) => (v.hidden = v.id !== "view-" + view));
+    document.body.dataset.tab = tab;
+    try { localStorage.setItem("clearway.tab", tab); } catch (e) {}
+    hooks.forEach((h) => { try { if (state) h(state, false, tab); } catch (e) {} });
     window.scrollTo({ top: 0 });
+  }
+  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showView(t.dataset.view)));
+  document.querySelectorAll(".subseg").forEach((seg) => seg.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    cpdlcSub = b.dataset.sub;
+    document.querySelectorAll(".subseg button").forEach((x) => x.classList.toggle("on", x.dataset.sub === cpdlcSub));
+    showView("cpdlc");
   }));
 
   $("messageList").addEventListener("click", (e) => {
@@ -270,7 +297,7 @@
       if (m && !m.options.length) act("ack", { id: m.id });
     }
   });
-  $("ackAll").onclick = () => act("ack", {});
+  $("ackAll").onclick = () => act("ack", { scope: "cpdlc" });
   $("trashBox").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.toggle !== undefined) { trashOpen = !trashOpen; return renderTrash(); }
@@ -285,7 +312,8 @@
     const m = state.messages.find((x) => x.id === id);
     if (!m) return;
     sheetId = id;
-    $("sheetTitle").textContent = `Reply to ${m.station}`;
+    $("sheetTitle").textContent = m.kind === "radio" ? "Reply on frequency" : `Reply to ${m.station}`;
+    $("sheetText").classList.toggle("mono", !["pm", "radio"].includes(m.kind));   // vPilot text keeps its case
     $("sheetQuote").textContent = m.text.replace(/@/g, "");
     $("sheetText").value = "";
     $("sheet").hidden = false;
@@ -304,6 +332,7 @@
     const b = e.target.closest("button"); if (!b) return;
     seg.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
     if (seg.id === "speedUnit") $("reqSpeed").placeholder = b.dataset.v === "M" ? ".84" : "280";
+    if (seg.id === "textKind") $("vTo").hidden = b.dataset.v === "radio";
   }));
   const segVal = (id) => document.querySelector(`#${id} .on`).dataset.v;
 
@@ -340,6 +369,12 @@
       const rmk = val("ocnRmk") || "NIL";
       return ["telex", { station: val("ocnStation"), text: `OCEANIC CLEARANCE REQUEST CALLSIGN: ${state.callsign} ENTRY POINT: ${val("ocnEntry")} AT: ${val("ocnTime")} REQ: M.${val("ocnMach").replace(/\D/g, "")} FL${val("ocnLevel").replace(/\D/g, "")} RMKS: ${rmk}` }];
     },
+    vtext: () => {
+      const radio = segVal("textKind") === "radio";
+      const text = $("vText").value.trim(); if (!text) throw new Error("Type a message.");
+      if (!radio && !val("vTo")) throw new Error("Enter a callsign.");
+      return ["text", { kind: radio ? "radio" : "pm", to: val("vTo"), text }];
+    },
     telex: () => { if (!val("telexStation") || !val("telexText")) throw new Error("Enter a station and a message."); return ["telex", { station: val("telexStation"), text: val("telexText") }]; },
     wx: () => { if (val("wxIcao").length !== 4) throw new Error("Enter a 4-letter ICAO code."); return ["inforeq", { what: segVal("wxKind"), icao: val("wxIcao") }]; },
   };
@@ -350,7 +385,7 @@
     b.disabled = true;
     const ok = await act(call[0], call[1], "Sent");
     b.disabled = false;
-    if (ok && ["free", "telex"].includes(b.dataset.send)) { $("cpdlcText").value = ""; $("telexText").value = ""; }
+    if (ok && ["free", "telex", "vtext"].includes(b.dataset.send)) { $("cpdlcText").value = ""; $("telexText").value = ""; $("vText").value = ""; }
   }));
 
   $("logonBtn").onclick = () => { const st = val("logonStation"); if (!st) return toast("Enter a station.", true); act("logon", { station: st }, `Logon request sent to ${st}`); };
@@ -366,7 +401,8 @@
     const ok = await act("settings", { hoppie_logon: $("setLogon").value.trim(), vatsim_cid: $("setCid").value.trim(), callsign_override: $("setCallsign").value.trim() }, "Saved");
     if (ok) { settingsDirty = false; $("setLogon").value = ""; }
   };
-  const toggles = { setNtfy: "ntfy_enabled", setMute: "mute_phone_when_panel_open", setAdsc: "adsc_enabled", setBrowser: "open_browser_on_start" };
+  const toggles = { setNtfy: "ntfy_enabled", setMute: "mute_phone_when_panel_open", setAdsc: "adsc_enabled", setBrowser: "open_browser_on_start",
+    setVpAuto: "vpilot_auto_connect", setVpAll: "vpilot_all_frequency" };
   Object.entries(toggles).forEach(([id, k]) => $(id).addEventListener("change", (e) => act("settings", { [k]: e.target.checked })));
   $("setLight").addEventListener("change", (e) => { applyTheme(e.target.checked ? "light" : "dark"); act("settings", { theme: e.target.checked ? "light" : "dark" }); });
 
@@ -378,6 +414,15 @@
   $("newTopic").onclick = () => { if (confirm("Create a new topic? You'll need to subscribe to it again in the ntfy app.")) act("new-topic", {}, "New topic created"); };
 
   // ---------- loop ----------
+  // small API for vp.js (vPilot tab and notepad)
+  const hooks = [];
+  window.CW = { api, act, toast, esc, utc, onRender: (fn) => hooks.push(fn), get state() { return state; }, VP, KIND_LABEL };
+  let startTab = "vpilot";
+  try { startTab = localStorage.getItem("clearway.tab") || "vpilot"; } catch (e) {}
+  if (location.hash.startsWith("#m")) startTab = "cpdlc";
+  if (location.hash.startsWith("#tab=")) startTab = location.hash.slice(5);   // e.g. #tab=notes
+  showView(startTab);
+
   poll(true);
   setInterval(() => poll(false), 1500);
   // refresh countdown text once per second without a network call

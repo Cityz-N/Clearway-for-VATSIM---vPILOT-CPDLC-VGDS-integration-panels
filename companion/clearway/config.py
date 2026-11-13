@@ -46,6 +46,12 @@ DEFAULTS = {
     "adsc_enabled": True,
     "open_browser_on_start": False,   # Clearway lives in the tray; double-click to open
     "theme": "dark",                  # "dark" or "light"
+    # vPilot plugin
+    "vpilot_auto_connect": True,      # connect to Hoppie as soon as vPilot connects to VATSIM
+    "vpilot_all_frequency": False,    # alert for all frequency text, not only messages that mention you
+    "vpilot_callsign": "",            # last details used to connect vPilot (filled automatically)
+    "vpilot_type": "",
+    "vpilot_selcal": "",
     "config_version": 2,
     # Local web server
     "port": 8787,
@@ -101,6 +107,8 @@ class Config:
             "hoppie_logon": str, "vatsim_cid": str, "callsign_override": str,
             "ntfy_enabled": bool, "mute_phone_when_panel_open": bool,
             "adsc_enabled": bool, "open_browser_on_start": bool, "theme": str,
+            "vpilot_auto_connect": bool, "vpilot_all_frequency": bool,
+            "vpilot_callsign": str, "vpilot_type": str, "vpilot_selcal": str,
         }
         for key, kind in editable.items():
             if key in data:
@@ -135,5 +143,7 @@ class Config:
             "adsc_enabled": self.values.get("adsc_enabled", True),
             "open_browser_on_start": self.values.get("open_browser_on_start", False),
             "theme": self.values.get("theme", "dark"),
+            "vpilot_auto_connect": self.values.get("vpilot_auto_connect", True),
+            "vpilot_all_frequency": self.values.get("vpilot_all_frequency", False),
             "port": self.values.get("port"),
         }

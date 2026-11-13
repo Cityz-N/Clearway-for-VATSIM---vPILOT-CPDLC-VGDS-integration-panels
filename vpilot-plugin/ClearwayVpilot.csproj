@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Clearway plugin for vPilot. vPilot runs on .NET Framework 4.7.2.
+       Build:  dotnet build -c Release   (needs vPilot installed; set VpilotDir if it isn't in C:\vPilot) -->
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>Clearway.vPilot</AssemblyName>
+    <RootNamespace>Clearway.Vpilot</RootNamespace>
+    <LangVersion>7.3</LangVersion>
+    <Version>0.4.0</Version>
+    <Product>Clearway vPilot plugin</Product>
+    <Copyright>Clearway contributors, MIT License</Copyright>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <VpilotDir Condition="'$(VpilotDir)' == ''">C:\vPilot</VpilotDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Provided by vPilot at runtime; never copied or redistributed. -->
+    <Reference Include="RossCarlson.Vatsim.Vpilot.Plugins">
+      <HintPath>$(VpilotDir)\RossCarlson.Vatsim.Vpilot.Plugins.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Web.Extensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

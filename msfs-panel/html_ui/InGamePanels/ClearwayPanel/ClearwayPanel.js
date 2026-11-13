@@ -1,23 +1,41 @@
 /* Clearway MSFS toolbar panel.
    Talks to the Clearway companion on this PC (http://localhost:8787).
+   Two tabs: vPilot (frequency + private chats, nearby ATC, transponder) and CPDLC.
    Written in plain ES2015 for the sim's Coherent GT browser; also runs in a normal browser for testing. */
 (function () {
   "use strict";
 
-  var API = "http://localhost:8787";
-  var POLL_MS = 2000;
+  // ?api=http://localhost:8797 lets developers point a browser copy of the panel at a test server
+  var apiParam = /[?&]api=([^&]+)/.exec(window.location.search || "");
+  var API = apiParam ? decodeURIComponent(apiParam[1]) : "http://localhost:8787";
+  var POLL_MS = 1000;
+  var COM_MS = 1000;
   var POSITION_MS = 10000;
+  var VP = { pm: 1, radio: 1, broadcast: 1, selcal: 1, vinfo: 1, vsys: 1 };
 
   var el = function (id) { return document.getElementById(id); };
   var state = null;
   var version = 0;
-  var lastUnacked = 0;
+  var lastVp = 0, lastCp = 0;
   var reachable = true;
   var expanded = false;
+  var tab = "cpdlc";
+  var notesOpen = false;
   var reqOpen = false;
   var reqKind = "logon";
   var wxKind = "metar";
   var started = false;
+  // vPilot chats
+  var activeChat = "FREQ";
+  var openedChats = [];
+  var closedChats = {};
+  var atcOpen = false;
+  var lastChatKey = "";
+  var ackPending = {};
+  var atcOpenRows = {};    // controllers whose information is expanded
+  var com = null;          // COM radios read from the sim
+  var comSentAt = 0, comSentKey = "";
+  var hintTimers = {};
 
   // ------------------------------------------------------------ storage (sim or browser)
   function load(key, fallback) {
@@ -49,9 +67,10 @@
     xhr.send(body ? JSON.stringify(body) : null);
   }
 
-  function act(path, body, okHint) {
+  function act(path, body, okHint, hintId, after) {
     request("POST", "/api/" + path, body || {}, function (ok, data) {
-      hint(ok ? (okHint || "") : (data.error || "Failed"), !ok);
+      if (okHint !== null) hint(ok ? (okHint || "") : (data.error || "Failed"), !ok, hintId);
+      if (after) after(ok, data);
       poll(true);
     });
   }
@@ -62,12 +81,55 @@
         if (reachable) { reachable = false; render(); }
         return;
       }
-      if (!reachable) { reachable = true; force = true; }
+      if (!reachable) { reachable = true; }
       if (data.unchanged) return;
       version = data.version;
       state = data;
       render();
     });
+  }
+
+  function readCom() {
+    if (typeof SimVar === "undefined") return;
+    try {
+      var f = function (v) { var n = SimVar.GetSimVarValue(v, "MHz"); return n ? n.toFixed(3) : ""; };
+      com = {
+        com1: f("COM ACTIVE FREQUENCY:1"), com1_stby: f("COM STANDBY FREQUENCY:1"), com1_tx: !!SimVar.GetSimVarValue("COM TRANSMIT:1", "Bool"),
+        com2: f("COM ACTIVE FREQUENCY:2"), com2_stby: f("COM STANDBY FREQUENCY:2"), com2_tx: !!SimVar.GetSimVarValue("COM TRANSMIT:2", "Bool")
+      };
+    } catch (e) { return; }
+    var key = JSON.stringify(com), now = Date.now();
+    if (reachable && (key !== comSentKey || now - comSentAt > 5000)) {   // share with Clearway (phone)
+      comSentKey = key; comSentAt = now;
+      request("POST", "/api/com", com, null);
+    }
+    updateFreqChip();
+  }
+
+  function txFreq() {
+    var c = com;
+    if (!c && state && state.vpilot && state.vpilot.com) {   // outside the sim: use what Clearway knows
+      var s = state.vpilot.com;
+      c = { com1: s.com1.active, com1_tx: s.com1.tx, com2: s.com2.active, com2_tx: s.com2.tx };
+    }
+    if (!c) return "";
+    if (c.com1_tx) return c.com1;
+    if (c.com2_tx) return c.com2;
+    return c.com1;
+  }
+
+
+  function updateFreqChip() {
+    var chip = document.querySelector('.cw-chip-tab[data-chat="FREQ"] .cw-chip-freq');
+    if (chip) chip.textContent = txFreq() ? " " + txFreq() : "";
+    var pop = el("cw-com-pop");
+    if (!com) { pop.innerHTML = "<div class=\"cw-com-row\">Radios are read from the sim (MSFS only).</div>"; return; }
+    var row = function (n) {
+      return "<div class=\"cw-com-row\"><b>COM" + n + "</b><span class=\"cw-freq\">" + (com["com" + n] || "---.---") + "</span>" +
+        "<span class=\"cw-com-stby\">stby " + (com["com" + n + "_stby"] || "---.---") + "</span>" +
+        (com["com" + n + "_tx"] ? "<span class=\"cw-com-tx\">TX</span>" : "") + "</div>";
+    };
+    pop.innerHTML = row(1) + row(2);
   }
 
   function sendPosition() {
@@ -83,8 +145,14 @@
   }
 
   // ------------------------------------------------------------ helpers
+  // The sim's panel font lacks some symbols; swap them for plain ones before display.
+  function plain(s) {
+    return String(s == null ? "" : s).replace(/\u2026/g, "...").replace(/\u2192/g, "to").replace(/\u00d7/g, "x")
+      .replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, "\"").replace(/[\u2013\u2014\u00b7]/g, "-");
+  }
+  var X_ICON = "<svg class=\"cw-xi\" viewBox=\"0 0 10 10\"><path d=\"M2 2l6 6M8 2l-6 6\"/></svg>";
   function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+    return plain(s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
     });
   }
@@ -101,56 +169,270 @@
     for (var i = 0; i < state.messages.length; i++) if (state.messages[i].id === id) return state.messages[i];
     return null;
   }
-
-  function hint(text, err) {
-    var h = el("cw-hint");
-    h.textContent = text || "";
+  function hint(text, err, id) {
+    var h = el(id || (tab === "vpilot" ? "cw-vp-hint" : "cw-hint"));
+    if (!h) return;
+    h.textContent = plain(text || "");
     h.style.color = err ? "var(--rose)" : "var(--muted)";
+    var key = id || "default";
+    clearTimeout(hintTimers[key]);
+    if (text) hintTimers[key] = setTimeout(function () { h.textContent = ""; }, err ? 9000 : 4000);
   }
+  function attr(t, name) { return t && t.getAttribute ? t.getAttribute(name) : null; }
+  function pick(t, name) { var n = t && t.closest ? t.closest("[" + name + "]") : null; return n ? n.getAttribute(name) : null; }
+  function up(t, selector) { return t && t.closest ? t.closest(selector) : null; }
 
-  // ------------------------------------------------------------ render
+  // ------------------------------------------------------------ render: shell
   function render() {
     if (state && state.settings) el("cw-root").classList.toggle("light", state.settings.theme === "light");
+    var vpCount = reachable && state ? (state.unacked_vpilot || 0) : 0;
+    var cpCount = reachable && state ? (state.unacked_cpdlc || 0) : 0;
     var bubble = el("cw-bubble");
     var status = !reachable ? "offline" : (state ? state.status : "offline");
-    var unacked = reachable && state ? state.unacked : 0;
+    var vpOnline = reachable && state && state.vpilot && state.vpilot.connected;
 
     bubble.className = "";
-    if (status === "online") bubble.classList.add("online");
-    if (status === "error" || !reachable) bubble.classList.add("error");
-    if (unacked > 0) bubble.classList.add("alert");
-    if (unacked > lastUnacked) {
-      // brief flash, then the amber "alert" colour stays until acknowledged
-      bubble.classList.add("flash");
-      setTimeout(function () { el("cw-bubble").classList.remove("flash"); }, 2900);
+    if (status === "online" || vpOnline) bubble.classList.add("online");
+    if (!reachable) bubble.classList.add("error");
+    if (!vpCount && !cpCount && !expanded) bubble.classList.add("idle");   // nearly invisible until needed
+    if (cpCount > 0) bubble.classList.add("alert");          // CPDLC waiting: amber
+    else if (vpCount > 0) bubble.classList.add("alert-vp");   // only vPilot waiting: cyan
+    if (vpCount > lastVp || cpCount > lastCp) {
+      bubble.classList.add(cpCount > lastCp ? "flash" : "flash-vp");
+      setTimeout(function () { el("cw-bubble").classList.remove("flash"); el("cw-bubble").classList.remove("flash-vp"); }, 2900);
     }
-    lastUnacked = unacked;
-    el("cw-count").textContent = unacked > 9 ? "9+" : String(unacked);
+    lastVp = vpCount; lastCp = cpCount;
+    setDot("cw-ndot-vp", vpCount); setDot("cw-ndot-cp", cpCount);
+    setDot("cw-tdot-vp", vpCount); setDot("cw-tdot-cp", cpCount);
 
+    renderVpilot();
+    renderCpdlc();
+    renderNotes();
+  }
+
+  function setDot(id, n) {
+    var d = el(id);
+    d.textContent = n > 9 ? "9+" : String(n);
+    d.classList.toggle("hidden", !n);
+  }
+
+  function showTab(t) {
+    tab = t;
+    save("CLEARWAY_TAB", t);
+    var tabs = el("cw-head").getElementsByClassName("cw-tab");
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle("on", attr(tabs[i], "data-tab") === t && !notesOpen);
+    el("cw-pane-vpilot").classList.toggle("hidden", t !== "vpilot" || notesOpen);
+    el("cw-pane-cpdlc").classList.toggle("hidden", t !== "cpdlc" || notesOpen);
+    el("cw-notes").classList.toggle("hidden", !notesOpen);
+    el("cw-notes-btn").classList.toggle("on", notesOpen);
+    lastChatKey = "";
+    if (state) render();
+    placeCard();
+  }
+
+  // ------------------------------------------------------------ render: vPilot
+  function vpMessages() {
+    var out = [];
+    if (!state) return out;
+    for (var i = 0; i < state.messages.length; i++) if (VP[state.messages[i].kind]) out.push(state.messages[i]);
+    return out;
+  }
+
+  function chatList() {
+    var msgs = vpMessages();
+    var chats = { FREQ: { unread: 0, last: 0 } };
+    var order = ["FREQ"];
+    for (var i = 0; i < msgs.length; i++) {
+      var m = msgs[i], c = m.chat || "FREQ";
+      if (!chats[c]) { chats[c] = { unread: 0, last: 0 }; order.push(c); }
+      chats[c].last = Math.max(chats[c].last, m.id);
+      if (m.dir === "in" && !m.acked) chats[c].unread++;
+    }
+    for (var j = 0; j < openedChats.length; j++) {
+      if (!chats[openedChats[j]]) { chats[openedChats[j]] = { unread: 0, last: 0 }; order.push(openedChats[j]); }
+    }
+    var visible = [];
+    for (var k = 0; k < order.length; k++) {
+      var name = order[k];
+      var hidden = name !== "FREQ" && closedChats[name] !== undefined && chats[name].last <= closedChats[name] && name !== activeChat;
+      if (!hidden) visible.push({ name: name, unread: chats[name].unread });
+    }
+    return visible;
+  }
+
+  function renderVpilot() {
+    var vp = (state && reachable && state.vpilot) || {};
+    el("cw-vp-dot").className = "cw-dot " + (!vp.active ? "" : vp.connected ? "online" : "connecting");
+    el("cw-vp-cs").textContent = !reachable ? "Clearway not running" : !vp.active ? "vPilot plugin not found" : vp.connected ? vp.callsign : "vPilot offline";
+    var conn = el("cw-vp-conn");
+    conn.textContent = vp.connected ? "Disconnect" : "Connect";
+    conn.classList.toggle("danger", !!vp.connected);
+    conn.classList.toggle("disabled", !vp.active);
+    el("cw-vp-sby").classList.toggle("on", vp.modec === false);
+    el("cw-vp-c").classList.toggle("on", vp.modec === true);
+    ["cw-vp-sby", "cw-vp-c", "cw-vp-id"].forEach(function (id) { el(id).classList.toggle("disabled", !vp.connected); });
+    if (vp.connected) {
+      el("cw-vp-connect").classList.add("hidden");
+      if (/^Connecting/.test(el("cw-vp-hint").textContent)) hint("", false, "cw-vp-hint");
+    }
+    var last = vp.last || {}, f = (state && state.flight) || {};
+    prefillInput("cw-vp-cs-in", last.callsign || (state && state.callsign));
+    prefillInput("cw-vp-type-in", last.type || f.aircraft);
+    prefillInput("cw-vp-selcal-in", last.selcal);
+
+    var chats = chatList(), found = false, html = "";
+    for (var i = 0; i < chats.length; i++) if (chats[i].name === activeChat) found = true;
+    if (!found) activeChat = "FREQ";
+    for (var j = 0; j < chats.length; j++) {
+      var c = chats[j];
+      html += "<div class=\"cw-chip-tab" + (c.name === activeChat && !atcOpen ? " on" : "") + "\" data-chat=\"" + esc(c.name) + "\">" +
+        (c.name === "FREQ" ? "FREQ<span class=\"cw-chip-freq\">" + (txFreq() ? " " + txFreq() : "") + "</span>" : esc(c.name)) +
+        (c.unread && (c.name !== activeChat || atcOpen) ? "<span class=\"cw-tdot vp\">" + c.unread + "</span>" : "") +
+        (c.name !== "FREQ" ? "<span class=\"cw-chip-x\" data-closechat=\"" + esc(c.name) + "\">" + X_ICON + "</span>" : "") + "</div>";
+    }
+    var n = vp.controllers ? vp.controllers.length : 0;
+    html += "<div class=\"cw-chip-tab atc" + (atcOpen ? " on" : "") + "\" data-atc-toggle=\"1\">ATC" + (n ? " " + n : "") + "</div>";
+    el("cw-vp-chips").innerHTML = html;
+
+    el("cw-vp-chat").classList.toggle("hidden", atcOpen);
+    el("cw-vp-atc").classList.toggle("hidden", !atcOpen);
+    el("cw-vp-input").placeholder = activeChat === "FREQ" ? "Message, or a .command" : "To " + activeChat + ", or a .command";
+    if (atcOpen) renderAtc(vp); else renderChat();
+
+    // reading the chat on screen marks it read
+    if (expanded && tab === "vpilot" && !notesOpen && !atcOpen) {
+      for (var k = 0; k < chats.length; k++) {
+        if (chats[k].name === activeChat && chats[k].unread && !ackPending[activeChat]) {
+          ackPending[activeChat] = true;
+          (function (chat) { act("ack", { chat: chat }, null, null, function () { delete ackPending[chat]; }); })(activeChat);
+        }
+      }
+    }
+  }
+
+  function prefillInput(id, v) {
+    var i = el(id);
+    if (i && !i.value && v && document.activeElement !== i) i.value = v;
+  }
+
+  function vpBubble(m) {
+    var time = "<span class=\"cw-time\">" + utc(m.ts) + "</span>";
+    if (m.kind === "vsys") return "<div class=\"cw-sys\">" + esc(m.text) + "</div>";
+    if (m.kind === "vinfo") return "<div class=\"cw-vinfo\"><div class=\"cw-meta\"><span class=\"cw-station\">" + esc(m.station) + "</span>" + time + "</div><div class=\"cw-pre\">" + esc(m.text) + "</div></div>";
+    if (m.kind === "selcal") return "<div class=\"cw-valert selcal\"><b>SELCAL</b> " + esc(m.station) + " - " + esc(m.text) + "</div>";
+    if (m.kind === "broadcast") return "<div class=\"cw-valert broadcast\"><b>Broadcast</b> " + esc(m.station) + ": " + esc(m.text) + "</div>";
+    var out = m.dir === "out";
+    var st = "";
+    if (out && m.status === "sending") st = "Sending...";
+    if (out && m.status === "failed") st = "Not delivered" + (m.error ? ": " + esc(m.error) : "");
+    var who = out ? (m.station === "SUPERVISORS" ? "You to supervisors" : "You") : esc(m.station);
+    return "<div class=\"cw-vmsg " + (out ? "out" : "in") + (m.mention ? " mention" : "") + (!out && !m.acked ? " unread" : "") + "\">" +
+      "<div class=\"cw-meta\"><span class=\"cw-station\">" + who + "</span>" + (m.freq ? "<span class=\"cw-freq\">" + esc(m.freq) + "</span>" : "") + time + "</div>" +
+      "<div class=\"cw-vtext\">" + esc(m.text) + "</div>" + (st ? "<div class=\"cw-state\">" + st + "</div>" : "") + "</div>";
+  }
+
+  function renderChat() {
+    var box = el("cw-vp-chat");
+    var msgs = vpMessages().filter(function (m) { return (m.chat || "FREQ") === activeChat; });
+    var key = activeChat + ":" + msgs.map(function (m) { return m.id + m.status + (m.acked ? 1 : 0); }).join(",");
+    if (key === lastChatKey) return;
+    lastChatKey = key;
+    var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    box.innerHTML = msgs.length ? msgs.slice(-60).map(vpBubble).join("")
+      : "<div class=\"cw-empty\">" + (activeChat === "FREQ" ? "Frequency text and controller info appear here." : "No messages with " + esc(activeChat) + " yet.") + "<br/>Type .help for commands.</div>";
+    if (nearBottom || !box.getAttribute("data-scrolled")) { box.scrollTop = box.scrollHeight; box.setAttribute("data-scrolled", "1"); }
+  }
+
+  function renderAtc(vp) {
+    var list = vp.controllers || [];
+    el("cw-vp-atc").innerHTML = list.length ? list.map(function (c) {
+      var open = !!atcOpenRows[c.callsign];
+      var info = "";
+      if (open) {
+        var body = c.info && c.info.length ? esc(c.info.join("\n"))
+          : (c.info_pending || !c.info ? "Requesting information..." : "No controller information.");
+        info = "<div class=\"cw-atc-info\">" + body + "</div>";
+      }
+      return "<div class=\"cw-atc-item" + (open ? " open" : "") + "\">" +
+        "<div class=\"cw-atc-row\" data-atc=\"" + esc(c.callsign) + "\" title=\"Show controller information\">" +
+        "<span class=\"cw-atc-arrow\"></span>" +
+        "<span class=\"cw-atc-cs\">" + esc(c.callsign) + "</span><span class=\"cw-freq\">" + esc(c.frequency) + "</span>" +
+        "<span class=\"cw-atc-d\">" + (c.distance !== undefined ? c.distance + " nm" : "") + "</span>" +
+        "<span class=\"cw-link\" data-chatwith=\"" + esc(c.callsign) + "\">Chat</span></div>" + info + "</div>";
+    }).join("")
+      : "<div class=\"cw-empty\">" + (vp.connected ? "No controllers in range." : "Connect vPilot to see nearby controllers.") + "</div>";
+  }
+
+  // expand/collapse a controller; fetch their information when it's missing or older than 5 minutes
+  function toggleAtc(callsign) {
+    atcOpenRows[callsign] = !atcOpenRows[callsign];
+    if (atcOpenRows[callsign]) {
+      var list = (state && state.vpilot && state.vpilot.controllers) || [], c = null;
+      for (var i = 0; i < list.length; i++) if (list[i].callsign === callsign) c = list[i];
+      if (!c || !c.info || c.info_age === null || c.info_age > 300) act("vp/atis", { callsign: callsign, quiet: true }, null);
+    }
+    renderVpilot();
+    placeCard();
+  }
+
+  function openChat(c) {
+    c = String(c).toUpperCase();
+    if (c !== "FREQ" && openedChats.indexOf(c) < 0) { openedChats.push(c); save("CLEARWAY_CHATS", openedChats); }
+    if (closedChats[c] !== undefined) { delete closedChats[c]; save("CLEARWAY_CLOSED", closedChats); }
+    activeChat = c; atcOpen = false; lastChatKey = "";
+    renderVpilot();
+    el("cw-vp-input").focus();
+  }
+
+  function closeChat(c) {
+    if (c === "FREQ") return;
+    var msgs = vpMessages().filter(function (m) { return m.chat === c; });
+    closedChats[c] = msgs.length ? msgs[msgs.length - 1].id : 0;
+    var names = Object.keys(closedChats);                       // keep the saved list small
+    while (names.length > 50) delete closedChats[names.shift()];
+    openedChats = openedChats.filter(function (x) { return x !== c; });
+    save("CLEARWAY_CHATS", openedChats); save("CLEARWAY_CLOSED", closedChats);
+    if (activeChat === c) activeChat = "FREQ";
+    lastChatKey = "";
+    renderVpilot();
+  }
+
+  function sendVp() {
+    var input = el("cw-vp-input");
+    var text = input.value.replace(/\s+/g, " ").trim();   // vPilot messages are one line
+    if (!text) return;
+    act("vp/command", { text: text, chat: activeChat }, "", "cw-vp-hint", function (ok, data) {
+      if (!ok) return;
+      input.value = "";
+      autoGrow(input);
+      if (data.open) openChat(data.open);
+      if (data.close) closeChat(activeChat);
+      if (data.copy) hint("Copy isn't available in the sim; use the phone or PC page.", true, "cw-vp-hint");
+    });
+  }
+
+  // ------------------------------------------------------------ render: CPDLC
+  function renderCpdlc() {
     var dot = el("cw-dot");
     dot.className = "cw-dot " + (state && reachable ? (state.status === "online" && state.error ? "connecting" : state.status) : "");
-    el("cw-callsign").textContent = state && state.callsign && reachable ? state.callsign : "Clearway";
-
+    el("cw-callsign").textContent = state && state.callsign && reachable ? state.callsign : "CPDLC";
     var unit = el("cw-unit");
     if (state && reachable && (state.current_unit || state.pending_logon)) {
-      unit.classList.remove("hidden");
       unit.className = "cw-pill" + (state.current_unit ? "" : " pending");
-      unit.textContent = state.current_unit || (state.pending_logon + "…");
+      unit.textContent = state.current_unit || (state.pending_logon + "...");
     } else {
-      unit.classList.add("hidden");
+      unit.className = "cw-pill hidden";
     }
-
     var notice = el("cw-notice");
     if (!reachable) {
       notice.innerHTML = "Start <b>Clearway</b> on this PC to use CPDLC.";
       notice.classList.remove("hidden");
     } else if (state && state.status !== "online") {
-      notice.innerHTML = state.error ? esc(state.error) : "Not connected. Open Clearway's Settings and press <b>Connect</b>.";
+      notice.innerHTML = state.error ? esc(state.error) : "Not connected to Hoppie. Open Clearway's Settings and press <b>Connect</b>.";
       notice.classList.remove("hidden");
     } else {
       notice.classList.add("hidden");
     }
-
     updateSendLabel();
     renderList();
   }
@@ -158,17 +440,14 @@
   function renderList() {
     var list = el("cw-list");
     if (!state || !reachable) { list.innerHTML = ""; return; }
-    var msgs = state.messages.slice(-30).reverse();
-    if (!msgs.length) {
-      list.innerHTML = "<div class=\"cw-empty\">No messages yet.</div>" + trashHtml();
-      return;
-    }
+    var msgs = state.messages.filter(function (m) { return !VP[m.kind]; }).slice(-30).reverse();
+    if (!msgs.length) { list.innerHTML = "<div class=\"cw-empty\">No CPDLC messages yet.</div>" + trashHtml(); return; }
     var html = "";
     for (var i = 0; i < msgs.length; i++) {
       var m = msgs[i];
-      if (m.dir === "sys") { html += "<div class=\"cw-sys\">" + esc(m.text) + " <span class=\"cw-del\" data-del=\"" + m.id + "\">&#215;</span></div>"; continue; }
+      if (m.dir === "sys") { html += "<div class=\"cw-sys\">" + esc(m.text) + " <span class=\"cw-del\" data-del=\"" + m.id + "\">" + X_ICON + "</span></div>"; continue; }
       var unread = m.dir === "in" && !m.acked;
-      var label = m.kind === "cpdlc" ? "CPDLC" : (m.kind === "telex" ? "TELEX" : "INFO");
+      var label = m.tag || { cpdlc: "CPDLC", telex: "TELEX" }[m.kind] || "INFO";
       var actions = "";
       for (var j = 0; j < m.options.length; j++) {
         actions += "<div class=\"cw-btn " + m.options[j] + "\" data-reply=\"" + m.options[j] + "\" data-id=\"" + m.id + "\">" + m.options[j] + "</div>";
@@ -177,136 +456,47 @@
       var st = "";
       if (m.dir === "in" && m.reply) st = "Answered " + esc(m.reply);
       if (m.dir === "in" && m.status === "standby") st = "STANDBY sent";
-      if (m.dir === "out" && m.status === "awaiting") st = "Awaiting reply…";
+      if (m.dir === "out" && m.status === "awaiting") st = "Awaiting reply...";
       if (m.dir === "out" && m.status === "answered") st = "ATC: " + esc(String(m.reply).replace(/@/g, ""));
-      if (m.dir === "out" && m.status === "failed") st = "Not delivered";
+      if (m.dir === "out" && m.status === "failed") st = "Not delivered" + (m.error ? ": " + esc(m.error) : "");
       html += "<div class=\"cw-msg " + m.dir + (unread ? " unread" : "") + (m.collapsed ? " collapsed" : "") + "\" data-msg=\"" + m.id + "\">" +
-        "<div class=\"cw-bar\"></div>" +
-        "<div class=\"cw-meta\"><span class=\"cw-chip " + m.kind + "\">" + label + "</span>" +
-        "<span class=\"cw-station\">" + (m.dir === "out" ? "→ " : "") + esc(m.station) + "</span>" +
+        "<div class=\"cw-bar-l\"></div>" +
+        "<div class=\"cw-meta\"><span class=\"cw-chip " + m.kind + " tag-" + label + "\">" + label + "</span>" +
+        "<span class=\"cw-station\">" + (m.dir === "out" ? "to " : "") + esc(m.station) + "</span>" +
         "<span class=\"cw-time\">" + utc(m.ts) + "</span>" +
         "<span class=\"cw-fold\" data-fold=\"" + m.id + "\" title=\"" + (m.collapsed ? "Expand" : "Collapse") + "\"></span>" +
-        "<span class=\"cw-del\" data-del=\"" + m.id + "\" title=\"Delete\">&#215;</span></div>" +
+        "<span class=\"cw-del\" data-del=\"" + m.id + "\" title=\"Delete\">" + X_ICON + "</span></div>" +
         "<div class=\"cw-text\">" + fmt(m.text) + "</div>" +
         (st ? "<div class=\"cw-state\">" + st + "</div>" : "") +
-        (actions ? "<div class=\"cw-actions\">" + actions + "</div>" : "") +
-        "</div>";
+        (actions ? "<div class=\"cw-actions\">" + actions + "</div>" : "") + "</div>";
     }
     list.innerHTML = html + trashHtml();
   }
 
-  // Messages deleted this session (kept by the companion until it quits).
+  // CPDLC messages deleted this session (kept by the companion until it quits)
   var trashOpen = false;
   function trashHtml() {
-    var t = (state && state.trash) || [];
+    var t = ((state && state.trash) || []).filter(function (m) { return !VP[m.kind]; });
     if (!t.length) { trashOpen = false; return ""; }
-    var html = "<div class=\"cw-trash-bar\"><span>" + t.length + " deleted</span>" +
-      "<span class=\"cw-link\" data-trash-toggle=\"1\">" + (trashOpen ? "Hide" : "Show") + "</span></div>";
+    var html = "<div class=\"cw-trash-bar\"><span>" + t.length + " deleted</span><span class=\"cw-link\" data-trash-toggle=\"1\">" + (trashOpen ? "Hide" : "Show") + "</span></div>";
     if (trashOpen) {
       for (var i = 0; i < t.length && i < 15; i++) {
-        var m = t[i];
-        html += "<div class=\"cw-trash-row\"><span class=\"cw-trash-text\">" + esc((m.dir === "out" ? "→ " : "") + m.station + " · " + String(m.text).replace(/@/g, "")) +
-          "</span><span class=\"cw-link\" data-restore=\"" + m.id + "\">Restore</span></div>";
+        html += "<div class=\"cw-trash-row\"><span class=\"cw-trash-text\">" + esc((t[i].dir === "out" ? "to " : "") + t[i].station + " - " + String(t[i].text).replace(/@/g, "")) +
+          "</span><span class=\"cw-link\" data-restore=\"" + t[i].id + "\">Restore</span></div>";
       }
       html += "<div class=\"cw-trash-all\"><span class=\"cw-link\" data-restore-all=\"1\">Restore all</span></div>";
     }
     return html;
   }
 
-  // ------------------------------------------------------------ layout: icon + card
-  var scale = 1;
-  function applyScale() {
-    var h = window.innerHeight || 1080;
-    scale = h / 1080;
-    el("cw-root").style.fontSize = (14 * scale) + "px";
-    var pos = load("CLEARWAY_POS", null);
-    if (!pos) pos = { x: 0.03, y: 0.25 };
-    placeBubble(pos.x * window.innerWidth, pos.y * window.innerHeight, false);
-  }
-
-  function placeBubble(x, y, persist) {
-    var b = el("cw-bubble");
-    var size = b.offsetWidth || 48;
-    x = Math.max(4, Math.min(window.innerWidth - size - 4, x));
-    y = Math.max(4, Math.min(window.innerHeight - size - 4, y));
-    b.style.left = x + "px";
-    b.style.top = y + "px";
-    if (persist) save("CLEARWAY_POS", { x: x / window.innerWidth, y: y / window.innerHeight });
-    placeCard();
-  }
-
-  function placeCard() {
-    var b = el("cw-bubble"), c = el("cw-card");
-    var bx = b.offsetLeft, by = b.offsetTop, bs = b.offsetWidth || 48;
-    var cw = c.offsetWidth || 350, ch = c.offsetHeight || 300;
-    var gap = 10 * scale;
-    // open towards the middle of the screen
-    var x = bx + bs / 2 < window.innerWidth / 2 ? bx + bs + gap : bx - cw - gap;
-    var y = Math.max(4, Math.min(window.innerHeight - ch - 4, by));
-    c.style.left = x + "px";
-    c.style.top = y + "px";
-  }
-
-  function setExpanded(v) {
-    expanded = v;
-    el("cw-card").classList.toggle("hidden", !expanded);
-    save("CLEARWAY_EXPANDED", expanded);
-    if (expanded) { placeCard(); poll(true); }
-  }
-
-  // Drag the icon (or the card header) anywhere on screen.
-  function makeDraggable(handle, onClick) {
-    var startX, startY, originX, originY, moved;
-    handle.addEventListener("mousedown", function (e) {
-      if (e.button !== 0) return;
-      if (e.target.closest && e.target.closest(".cw-icon-btn")) return;
-      var b = el("cw-bubble");
-      startX = e.clientX; startY = e.clientY;
-      originX = b.offsetLeft; originY = b.offsetTop;
-      moved = false;
-      var cap = el("cw-capture");
-      cap.classList.add("on");
-      function move(ev) {
-        var dx = ev.clientX - startX, dy = ev.clientY - startY;
-        if (!moved && Math.abs(dx) + Math.abs(dy) < 5) return;
-        moved = true;
-        placeBubble(originX + dx, originY + dy, false);
-      }
-      function up() {
-        cap.classList.remove("on");
-        document.removeEventListener("mousemove", move);
-        document.removeEventListener("mouseup", up);
-        if (moved) placeBubble(el("cw-bubble").offsetLeft, el("cw-bubble").offsetTop, true);
-        else if (onClick) onClick();
-      }
-      document.addEventListener("mousemove", move);
-      document.addEventListener("mouseup", up);
-      e.preventDefault();
-    });
-  }
-
-  // ------------------------------------------------------------ text input (keep keys away from the sim)
-  function wireInput(input) {
-    input.addEventListener("focus", function () {
-      if (typeof Coherent !== "undefined") Coherent.trigger("FOCUS_INPUT_FIELD", input.id, "", "", "", false);
-    });
-    input.addEventListener("blur", function () {
-      if (typeof Coherent !== "undefined") Coherent.trigger("UNFOCUS_INPUT_FIELD", input.id);
-    });
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.keyCode === 13) send();
-      e.stopPropagation();
-    });
-  }
-
-  // Request forms. Each field: k = key, ph = placeholder, half = takes half the width.
+  // ------------------------------------------------------------ CPDLC request forms
   var FORMS = {
     logon: [{ k: "station", ph: "ATC station, e.g. EGGX" }],
     level: [{ k: "fl", ph: "Flight level, e.g. 370" }],
     direct: [{ k: "fix", ph: "Waypoint" }],
     text: [{ k: "text", ph: "Free text to current ATC" }],
     pdc: [
-      { k: "station", ph: "Station, e.g. EGLL", half: true }, { k: "type", ph: "Aircraft", half: true },
+      { k: "station", ph: "Station, e.g. EGLL", half: true }, { k: "type", ph: "Aircraft type (B77W)", half: true },
       { k: "dep", ph: "From", half: true }, { k: "arr", ph: "To", half: true },
       { k: "stand", ph: "Stand", half: true }, { k: "atis", ph: "ATIS letter", half: true }
     ],
@@ -325,7 +515,8 @@
     var v = formVals[kind] || (formVals[kind] = {});
     if (kind === "pdc") {
       if (!v.station && f.departure) v.station = f.departure;
-      if (!v.type && f.aircraft) v.type = f.aircraft;
+      var vpType = state && state.vpilot && state.vpilot.last ? state.vpilot.last.type : "";
+      if (!v.type && (vpType || f.aircraft)) v.type = vpType || f.aircraft;
       if (!v.dep && f.departure) v.dep = f.departure;
       if (!v.arr && f.arrival) v.arr = f.arrival;
     }
@@ -334,18 +525,21 @@
   }
 
   function renderFields() {
-    var vals = prefill(reqKind);
-    var html = "";
-    var fields = FORMS[reqKind];
+    var vals = prefill(reqKind), fields = FORMS[reqKind], html = "";
     for (var i = 0; i < fields.length; i++) {
       var fd = fields[i];
+      if (fd.k === "text") {
+        html += "<textarea id=\"cw-f-text\" data-k=\"text\" rows=\"1\" class=\"cw-input cw-field cw-grow\" placeholder=\"" + fd.ph + "\">" + esc(vals.text || "") + "</textarea>";
+        continue;
+      }
       html += "<input id=\"cw-f-" + fd.k + "\" data-k=\"" + fd.k + "\" class=\"cw-input cw-field" + (fd.half ? " half" : "") +
         "\" type=\"text\" placeholder=\"" + fd.ph + "\" value=\"" + esc(vals[fd.k] || "") + "\"/>";
     }
     var box = el("cw-fields");
     box.innerHTML = html;
-    var inputs = box.getElementsByTagName("input");
-    for (var j = 0; j < inputs.length; j++) wireInput(inputs[j]);
+    var inputs = box.querySelectorAll("input, textarea");
+    for (var j = 0; j < inputs.length; j++) wireInput(inputs[j], send);
+    var grow = el("cw-f-text"); if (grow) autoGrow(grow);
     placeCard();
   }
 
@@ -353,65 +547,69 @@
     reqKind = v;
     ["cw-req-kind", "cw-req-kind2"].forEach(function (id) {
       var btns = el(id).children;
-      for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("on", btns[i].getAttribute("data-v") === v);
+      for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("on", attr(btns[i], "data-v") === v);
     });
     el("cw-wx-kind").classList.toggle("hidden", v !== "wx");
     renderFields();
     updateSendLabel();
-    hint("");
+    hint("", false, "cw-hint");
   }
 
   function updateSendLabel() {
     var logged = state && reachable && (state.current_unit || state.pending_logon);
-    var label = { logon: logged ? "Log off" : "Log on", wx: "Get", pdc: "Request", oceanic: "Request" }[reqKind] || "Send";
-    el("cw-send").textContent = label;
+    el("cw-send").textContent = { logon: logged ? "Log off" : "Log on", wx: "Get", pdc: "Request", oceanic: "Request" }[reqKind] || "Send";
   }
 
   function field(k) {
     var input = el("cw-f-" + k);
-    return input ? input.value.trim().toUpperCase() : "";
+    return input ? input.value.replace(/\s+/g, " ").trim().toUpperCase() : "";
+  }
+
+  // textareas grow with their text, up to ~4 lines, then scroll
+  function autoGrow(ta) {
+    ta.style.height = "auto";
+    var lineH = parseFloat(getComputedStyle(ta).lineHeight) || 18;
+    var max = lineH * 4 + 16;
+    ta.style.height = Math.min(ta.scrollHeight, max) + "px";
+    ta.style.overflowY = ta.scrollHeight > max ? "auto" : "hidden";
   }
 
   function send() {
     var cs = state ? state.callsign : "";
     var logged = state && (state.current_unit || state.pending_logon);
-    var clear = [];
+    var clear = [], H = "cw-hint";
     if (reqKind === "logon") {
       var st = field("station");
-      if (logged && !st) return act("logoff", {}, "Logged off");
-      if (!st) return hint("Enter a station", true);
-      act("logon", { station: st }, "Logon request sent to " + st);
+      if (logged && !st) return act("logoff", {}, "Logged off", H);
+      if (!st) return hint("Enter a station", true, H);
+      act("logon", { station: st }, "Logon request sent to " + st, H);
     } else if (reqKind === "level") {
       var fl = field("fl").replace(/\D/g, "");
-      if (!fl) return hint("Enter a flight level", true);
-      act("cpdlc", { text: "REQUEST FL" + fl }, "Request sent");
+      if (!fl) return hint("Enter a flight level", true, H);
+      act("cpdlc", { text: "REQUEST FL" + fl }, "Request sent", H);
     } else if (reqKind === "direct") {
-      if (!field("fix")) return hint("Enter a waypoint", true);
-      act("cpdlc", { text: "REQUEST DIRECT TO " + field("fix") }, "Request sent");
+      if (!field("fix")) return hint("Enter a waypoint", true, H);
+      act("cpdlc", { text: "REQUEST DIRECT TO " + field("fix") }, "Request sent", H);
     } else if (reqKind === "text") {
-      if (!field("text")) return hint("Type a message", true);
-      act("cpdlc", { text: field("text"), ra: "Y" }, "Sent");
+      if (!field("text")) return hint("Type a message", true, H);
+      act("cpdlc", { text: field("text"), ra: "Y" }, "Sent", H);
       clear = ["text"];
     } else if (reqKind === "pdc") {
-      if (!field("station") || !field("type") || !field("dep") || !field("arr") || !field("stand") || !field("atis")) {
-        return hint("Fill in all clearance fields", true);
-      }
+      if (!field("station") || !field("type") || !field("dep") || !field("arr") || !field("stand") || !field("atis")) return hint("Fill in all clearance fields", true, H);
       act("telex", { station: field("station"), text: "REQUEST PREDEP CLEARANCE " + cs + " " + field("type") + " TO " + field("arr") +
-        " AT " + field("dep") + " STAND " + field("stand") + " ATIS " + field("atis") }, "Clearance requested");
+        " AT " + field("dep") + " STAND " + field("stand") + " ATIS " + field("atis") }, "Clearance requested", H);
     } else if (reqKind === "oceanic") {
-      if (!field("station") || !field("entry") || !field("eta") || !field("mach") || !field("fl")) {
-        return hint("Fill in station, entry, ETA, Mach and FL", true);
-      }
+      if (!field("station") || !field("entry") || !field("eta") || !field("mach") || !field("fl")) return hint("Fill in station, entry, ETA, Mach and FL", true, H);
       act("telex", { station: field("station"), text: "OCEANIC CLEARANCE REQUEST CALLSIGN: " + cs + " ENTRY POINT: " + field("entry") +
         " AT: " + field("eta") + " REQ: M." + field("mach").replace(/\D/g, "") + " FL" + field("fl").replace(/\D/g, "") +
-        " RMKS: " + (field("rmk") || "NIL") }, "Oceanic clearance requested");
+        " RMKS: " + (field("rmk") || "NIL") }, "Oceanic clearance requested", H);
     } else if (reqKind === "telex") {
-      if (!field("station") || !field("text")) return hint("Enter a station and a message", true);
-      act("telex", { station: field("station"), text: field("text") }, "Telex sent");
+      if (!field("station") || !field("text")) return hint("Enter a station and a message", true, H);
+      act("telex", { station: field("station"), text: field("text") }, "Telex sent", H);
       clear = ["text"];
     } else if (reqKind === "wx") {
-      if (field("icao").length !== 4) return hint("Enter a 4-letter ICAO", true);
-      act("inforeq", { what: wxKind, icao: field("icao") }, "Requested");
+      if (field("icao").length !== 4) return hint("Enter a 4-letter ICAO", true, H);
+      act("inforeq", { what: wxKind, icao: field("icao") }, "Requested", H);
     }
     for (var i = 0; i < clear.length; i++) {
       var input = el("cw-f-" + clear[i]);
@@ -419,6 +617,107 @@
       if (formVals[reqKind]) formVals[reqKind][clear[i]] = "";
     }
   }
+
+  // ------------------------------------------------------------ notepad
+  var notesTimer = null, notesDirty = false;
+  function renderNotes() {
+    var ta = el("cw-notes-text");
+    if (state && !notesDirty && document.activeElement !== ta && ta.value !== (state.notes || "")) ta.value = state.notes || "";
+  }
+
+  // ------------------------------------------------------------ layout: icon + card
+  var scale = 1;
+  function applyScale() {
+    scale = (window.innerHeight || 1080) / 1080;
+    el("cw-root").style.fontSize = (12.5 * scale) + "px";
+    var pos = load("CLEARWAY_POS", null) || { x: 0.03, y: 0.25 };
+    placeBubble(pos.x * window.innerWidth, pos.y * window.innerHeight, false);
+  }
+
+  function placeBubble(x, y, persist) {
+    var b = el("cw-bubble"), size = b.offsetWidth || 48;
+    x = Math.max(4, Math.min(window.innerWidth - size - 4, x));
+    y = Math.max(4, Math.min(window.innerHeight - size - 4, y));
+    b.style.left = x + "px";
+    b.style.top = y + "px";
+    if (persist) save("CLEARWAY_POS", { x: x / window.innerWidth, y: y / window.innerHeight });
+    placeCard();
+  }
+
+  function placeCard() {
+    var b = el("cw-bubble"), c = el("cw-card");
+    var bx = b.offsetLeft, by = b.offsetTop, bs = b.offsetWidth || 48;
+    var cw = c.offsetWidth || 350, ch = c.offsetHeight || 300, gap = 10 * scale;
+    var x = bx + bs / 2 < window.innerWidth / 2 ? bx + bs + gap : bx - cw - gap;   // open towards the middle
+    var y = Math.max(4, Math.min(window.innerHeight - ch - 4, by));
+    c.style.left = x + "px";
+    c.style.top = y + "px";
+  }
+
+  function setExpanded(v) {
+    expanded = v;
+    el("cw-card").classList.toggle("hidden", !expanded);
+    save("CLEARWAY_EXPANDED", expanded);
+    el("cw-bubble").classList.toggle("idle", !expanded && !(lastVp || lastCp));
+    if (expanded) { lastChatKey = ""; placeCard(); poll(true); }
+  }
+
+  function makeDraggable(handle, onClick) {
+    var startX, startY, originX, originY, moved;
+    handle.addEventListener("mousedown", function (e) {
+      if (e.button !== 0) return;
+      if (up(e.target, ".cw-icon-btn") || up(e.target, ".cw-tab")) return;
+      var b = el("cw-bubble");
+      startX = e.clientX; startY = e.clientY;
+      originX = b.offsetLeft; originY = b.offsetTop;
+      moved = false;
+      var cap = el("cw-capture");
+      cap.classList.add("on");
+      function move(ev) {
+        var dx = ev.clientX - startX, dy = ev.clientY - startY;
+        if (!moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+        moved = true;
+        placeBubble(originX + dx, originY + dy, false);
+      }
+      function upHandler() {
+        cap.classList.remove("on");
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", upHandler);
+        if (moved) placeBubble(el("cw-bubble").offsetLeft, el("cw-bubble").offsetTop, true);
+        else if (onClick) onClick();
+      }
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", upHandler);
+      e.preventDefault();
+    });
+  }
+
+  // keep typed keys away from the sim while an input has focus
+  function wireInput(input, onEnter) {
+    input.addEventListener("focus", function () {
+      if (typeof Coherent !== "undefined") Coherent.trigger("FOCUS_INPUT_FIELD", input.id, "", "", "", false);
+    });
+    input.addEventListener("blur", function () {
+      if (typeof Coherent !== "undefined") Coherent.trigger("UNFOCUS_INPUT_FIELD", input.id);
+    });
+    var lastEnter = 0;
+    function onKey(e) {
+      var isEnter = e.key === "Enter" || e.keyCode === 13 || e.which === 13;
+      if (isEnter && !e.shiftKey && onEnter) {
+        e.preventDefault();
+        var now = Date.now();
+        if (now - lastEnter > 400) { lastEnter = now; onEnter(); }
+      }
+      e.stopPropagation();
+    }
+    input.addEventListener("keydown", onKey);
+    input.addEventListener("keypress", onKey);
+    input.addEventListener("keyup", onKey);
+    if (input.tagName === "TEXTAREA" && input.classList.contains("cw-grow")) {
+      input.addEventListener("input", function () { autoGrow(input); });
+    }
+  }
+
   // ------------------------------------------------------------ start
   function start() {
     if (started) return;
@@ -428,13 +727,65 @@
     var frame = document.querySelector("ingame-ui");
     if (frame && frame.classList) { frame.classList.remove("hide"); frame.classList.remove("panelInvisible"); }
 
+    openedChats = load("CLEARWAY_CHATS", []);
+    closedChats = load("CLEARWAY_CLOSED", {});
     applyScale();
     window.addEventListener("resize", applyScale);
 
     makeDraggable(el("cw-bubble"), function () { setExpanded(!expanded); });
     makeDraggable(el("cw-head"), null);
     el("cw-min").addEventListener("click", function () { setExpanded(false); });
+    el("cw-head").addEventListener("click", function (e) {
+      var t = up(e.target, ".cw-tab");
+      if (t) { notesOpen = false; showTab(attr(t, "data-tab")); }
+    });
+    el("cw-notes-btn").addEventListener("click", function () { notesOpen = !notesOpen; showTab(tab); });
 
+    // vPilot controls
+    el("cw-vp-conn").addEventListener("click", function () {
+      var vp = (state && state.vpilot) || {};
+      if (!vp.active) return hint("Install the Clearway plugin in vPilot first.", true, "cw-vp-hint");
+      if (vp.connected) return act("vp/disconnect", {}, "Disconnecting...", "cw-vp-hint");
+      el("cw-vp-connect").classList.toggle("hidden");
+      placeCard();
+    });
+    el("cw-vp-connect-go").addEventListener("click", function () {
+      act("vp/connect", { callsign: el("cw-vp-cs-in").value, type_code: el("cw-vp-type-in").value, selcal: el("cw-vp-selcal-in").value }, "Connecting...", "cw-vp-hint");
+    });
+    el("cw-vp-sby").addEventListener("click", function () { act("vp/modec", { on: false }, "Standby", "cw-vp-hint"); });
+    el("cw-vp-c").addEventListener("click", function () { act("vp/modec", { on: true }, "Mode C", "cw-vp-hint"); });
+    el("cw-vp-id").addEventListener("click", function () {
+      act("vp/ident", {}, "Ident", "cw-vp-hint", function (ok) {
+        if (!ok) return;
+        el("cw-vp-id").classList.add("on");
+        setTimeout(function () { el("cw-vp-id").classList.remove("on"); }, 1500);
+      });
+    });
+    el("cw-vp-chips").addEventListener("click", function (e) {
+      var t = e.target;
+      var x = pick(t, "data-closechat");
+      if (x) return closeChat(x);
+      var chip = up(t, ".cw-chip-tab");
+      if (!chip) return;
+      if (attr(chip, "data-atc-toggle")) { atcOpen = !atcOpen; lastChatKey = ""; renderVpilot(); return placeCard(); }
+      activeChat = attr(chip, "data-chat"); atcOpen = false; lastChatKey = "";
+      renderVpilot();
+      placeCard();
+    });
+    el("cw-vp-atc").addEventListener("click", function (e) {
+      var c = pick(e.target, "data-chatwith");
+      if (c) return openChat(c);
+      var row = pick(e.target, "data-atc");
+      if (row) toggleAtc(row);
+    });
+    el("cw-vp-send").addEventListener("click", sendVp);
+    wireInput(el("cw-vp-input"), sendVp);
+    el("cw-vp-input").addEventListener("input", function () { autoGrow(el("cw-vp-input")); });
+    autoGrow(el("cw-vp-input"));   // start at one line
+    ["cw-vp-cs-in", "cw-vp-type-in", "cw-vp-selcal-in"].forEach(function (id) { wireInput(el(id), null); });
+
+    // CPDLC controls
+    el("cw-clear").addEventListener("click", function () { act("clear", {}, null); });
     el("cw-req-toggle").addEventListener("click", function () {
       reqOpen = !reqOpen;
       el("cw-req").classList.toggle("hidden", !reqOpen);
@@ -443,64 +794,83 @@
       placeCard();
     });
     ["cw-req-kind", "cw-req-kind2"].forEach(function (id) {
-      el(id).addEventListener("click", function (e) {
-        var v = e.target.getAttribute && e.target.getAttribute("data-v");
-        if (v) setReqKind(v);
-      });
+      el(id).addEventListener("click", function (e) { var v = attr(e.target, "data-v"); if (v) setReqKind(v); });
     });
-    // remember what was typed when switching between request types
     el("cw-fields").addEventListener("input", function (e) {
-      var k = e.target.getAttribute && e.target.getAttribute("data-k");
-      if (k) { (formVals[reqKind] || (formVals[reqKind] = {}))[k] = e.target.value; }
+      var k = attr(e.target, "data-k");
+      if (k) (formVals[reqKind] || (formVals[reqKind] = {}))[k] = e.target.value;
     });
-    el("cw-clear").addEventListener("click", function () { act("clear", {}, ""); });
     el("cw-wx-kind").addEventListener("click", function (e) {
-      var v = e.target.getAttribute && e.target.getAttribute("data-v");
+      var v = attr(e.target, "data-v");
       if (!v) return;
       wxKind = v;
       var btns = el("cw-wx-kind").children;
       for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("on", btns[i] === e.target);
     });
     el("cw-send").addEventListener("click", send);
-
     el("cw-list").addEventListener("click", function (e) {
-      var t = e.target;
-      var r = t.getAttribute && t.getAttribute("data-reply");
-      if (r) return act("reply", { id: +t.getAttribute("data-id"), text: r }, r + " sent");
-      var a = t.getAttribute && t.getAttribute("data-ack");
-      if (a) return act("ack", { id: +a });
-      var d = t.getAttribute && t.getAttribute("data-del");
-      if (d) return act("delete", { id: +d });
-      var fo = t.getAttribute && t.getAttribute("data-fold");
-      if (fo) {
-        var fm = findMsg(+fo);
-        return act("collapse", { id: +fo, collapsed: !(fm && fm.collapsed) });
-      }
-      if (t.getAttribute && t.getAttribute("data-trash-toggle")) { trashOpen = !trashOpen; renderList(); return placeCard(); }
-      var rs = t.getAttribute && t.getAttribute("data-restore");
-      if (rs) return act("restore", { id: +rs }, "");
-      if (t.getAttribute && t.getAttribute("data-restore-all")) return act("restore", {}, "");
-      var folded = t.closest ? t.closest(".cw-msg.collapsed") : null;
-      if (folded) return act("collapse", { id: +folded.getAttribute("data-msg"), collapsed: false });
-      var card = t.closest ? t.closest(".cw-msg.unread") : null;
-      if (card && state) {
-        var id = +card.getAttribute("data-msg");
-        for (var i = 0; i < state.messages.length; i++) {
-          if (state.messages[i].id === id && !state.messages[i].options.length) return act("ack", { id: id });
-        }
-      }
+      var t = e.target, H = "cw-hint";
+      var r = pick(t, "data-reply");
+      if (r) return act("reply", { id: +pick(t, "data-id"), text: r }, r + " sent", H);
+      var a = pick(t, "data-ack");
+      if (a) return act("ack", { id: +a }, null);
+      var d = pick(t, "data-del");
+      if (d) return act("delete", { id: +d }, null);
+      var fo = pick(t, "data-fold");
+      if (fo) { var fm = findMsg(+fo); return act("collapse", { id: +fo, collapsed: !(fm && fm.collapsed) }, null); }
+      if (pick(t, "data-trash-toggle")) { trashOpen = !trashOpen; renderList(); return placeCard(); }
+      var rs = pick(t, "data-restore");
+      if (rs) return act("restore", { id: +rs }, null);
+      if (pick(t, "data-restore-all")) return act("restore", {}, null);
+      var folded = up(t, ".cw-msg.collapsed");
+      if (folded) return act("collapse", { id: +attr(folded, "data-msg"), collapsed: false }, null);
+      var card = up(t, ".cw-msg.unread");
+      if (card) { var m = findMsg(+attr(card, "data-msg")); if (m && !m.options.length) act("ack", { id: m.id }, null); }
+    });
+
+    // notepad
+    var ta = el("cw-notes-text");
+    wireInput(ta, null);
+    ta.addEventListener("input", function () {
+      notesDirty = true;
+      el("cw-notes-state").textContent = "Saving...";
+      clearTimeout(notesTimer);
+      notesTimer = setTimeout(function () {
+        act("notes", { text: ta.value }, null, null, function (ok) {
+          notesDirty = !ok;
+          el("cw-notes-state").textContent = ok ? "Saved" : "Not saved (is Clearway running?)";
+        });
+      }, 700);
     });
 
     reqOpen = load("CLEARWAY_REQ_OPEN", false);
     el("cw-req").classList.toggle("hidden", !reqOpen);
     el("cw-req-chev").classList.toggle("closed", !reqOpen);
     setReqKind("logon");
-    setExpanded(load("CLEARWAY_EXPANDED", false));
+    // ?open=vpilot|cpdlc opens the card on that tab (used to take documentation screenshots in a browser)
+    var openParam = /[?&]open=(vpilot|cpdlc)/.exec(window.location.search || "");
+    showTab(openParam ? openParam[1] : load("CLEARWAY_TAB", "vpilot"));
+    setExpanded(openParam ? true : load("CLEARWAY_EXPANDED", false));
 
     render();
     poll(true);
     setInterval(function () { poll(false); }, POLL_MS);
     setInterval(sendPosition, POSITION_MS);
+    setInterval(readCom, COM_MS);
+    readCom();
+    // hover the FREQ tab to see both radios
+    el("cw-vp-chips").addEventListener("mouseover", function (e) {
+      var chip = up(e.target, '.cw-chip-tab[data-chat="FREQ"]');
+      if (!chip) return;
+      updateFreqChip();
+      var pop = el("cw-com-pop"), card = el("cw-card");
+      pop.style.left = (chip.offsetLeft) + "px";
+      pop.style.top = (chip.offsetTop + chip.offsetHeight + 4) + "px";
+      pop.classList.remove("hidden");
+    });
+    el("cw-vp-chips").addEventListener("mouseout", function (e) {
+      if (!up(e.relatedTarget, '.cw-chip-tab[data-chat="FREQ"]')) el("cw-com-pop").classList.add("hidden");
+    });
   }
 
   // Register as a toolbar panel inside the sim; plain start in a normal browser.

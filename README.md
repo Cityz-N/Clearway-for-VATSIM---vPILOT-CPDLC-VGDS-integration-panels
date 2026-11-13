@@ -9,10 +9,13 @@ Clearway is a small companion program for Windows that connects to the [Hoppie A
 
 You can use both at the same time; they stay in sync.
 
-<p>
-  <img src="docs/phone-messages.jpg" width="300" alt="Clearway on a phone">
+<p align="center">
+  <img src="docs/phones.png" width="640" alt="Clearway on the iPhone: vPilot tab and CPDLC tab">
+</p>
+<p align="center">
+  <img src="docs/panel-vpilot.png" width="400" alt="MSFS panel, vPilot tab">
   &nbsp;
-  <img src="docs/msfs-panel.png" width="400" alt="Clearway MSFS panel">
+  <img src="docs/panel-cpdlc.png" width="400" alt="MSFS panel, CPDLC tab">
 </p>
 
 ## Features
@@ -29,6 +32,10 @@ You can use both at the same time; they stay in sync.
 - Collapse messages to one line, delete them, and restore deleted ones (until Clearway quits)
 - Dark theme by default, with a light theme in Settings that also applies to the MSFS panel
 - Runs quietly as a tray icon with no console window
+- **vPilot tab** (with the vPilot plugin): frequency chat plus one tab per private chat, nearby controllers (tap the arrow for their information), connect/disconnect, Mode C/standby, ident, and vPilot's dot commands. Clearway also connects to Hoppie automatically as soon as vPilot connects.
+- Two tabs everywhere: **vPilot** on the left, **CPDLC** on the right. Unread counters are cyan for vPilot and amber for CPDLC, on the tabs and on the panel's floating icon.
+- Notepad shared between the phone, the PC page and the MSFS panel
+- VDGS shortcut on the phone: opens the official VDGS page ([vats.im/vdgs](https://vats.im/vdgs)) for your TOBT, TSAT and start-up window
 
 ## How it works
 
@@ -60,6 +67,22 @@ Only the companion talks to Hoppie, so the phone and the panel never compete for
 4. For notifications, install **ntfy** from the App Store (free, no account). Tap **+** and subscribe to the topic shown in Clearway's Settings. Press **Send test** to check.
 
 > Notifications arrive anywhere, but replying from the phone needs your home Wi-Fi.
+
+### 4. The vPilot plugin (optional)
+
+1. Download `clearway-vpilot-plugin.zip` from the Releases page.
+2. Copy `Clearway.vPilot.dll` into vPilot's `Plugins` folder (for example `C:\vPilot\Plugins`).
+3. Restart vPilot. Its message window shows "Clearway plugin loaded".
+
+The **vPilot** tab (phone, PC page and MSFS panel) now works like vPilot's own window:
+
+- **Frequency** chat with everything on frequency (messages that mention you are highlighted and alert you), controller info (ATIS), METARs, broadcasts and SELCAL alerts
+- one tab per **private chat**; close a tab with × or `.close`
+- **Nearby ATC** with frequencies and distance; the arrow next to a controller shows their information
+- **Connect / Disconnect**, **Standby / Mode C** and **Ident**
+- dot commands: `.chat` `.msg` `.close` `.atis` `.wx` `.metar` `.wallop` `.clear` `.copy`, plus `.modec` `.standby` `.ident` `.connect` `.disconnect` and `.help`
+
+vPilot doesn't let plugins set the squawk code or tune radios, so `.x`/`.squawk`, `.com1`, `.com2`, `.com`, `.ctaf`, `.towerview`, `.aircraft`, `.debug`, `.reloadrules` and `.ignore` still need vPilot's own window. Clearway tells you when you type one.
 
 ### 3. The MSFS panel (optional)
 
@@ -111,6 +134,15 @@ python tools/build_panel.py --install
 
 The compiled panel definition is cached in `msfs-panel/compiled/`. Commit it, so GitHub Actions can package releases without the SDK.
 
+The vPilot plugin is a small C# library for .NET Framework 4.7.2. It builds against the plugin interface that ships with vPilot, which is not redistributed here:
+
+```bash
+cd vpilot-plugin
+dotnet build -c Release
+```
+
+Copy the result to `vpilot-plugin/compiled/` and commit it, so releases can include it.
+
 Releases are built by GitHub Actions when you push a tag such as `v0.1.0`.
 
 ## Project layout
@@ -120,6 +152,7 @@ companion/            Python companion (no third-party packages)
   clearway/           Hoppie client, CPDLC session, ntfy, web server
   web/                phone and desktop web app
 msfs-panel/           MSFS toolbar panel package sources
+vpilot-plugin/        vPilot plugin (C#) that bridges vPilot and Clearway
 tools/                build scripts, icon generator, mock Hoppie server
 ```
 
@@ -129,7 +162,7 @@ tools/                build scripts, icon generator, mock Hoppie server
 - [Hoppie's ACARS](https://www.hoppie.nl/acars/) by Jeroen Hoppenbrouwers makes all of this possible.
 - QR codes by [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (MIT).
 
-Clearway is not affiliated with Hoppie, VATSIM, ntfy or Microsoft. It's for flight simulation only.
+Clearway is not affiliated with Hoppie, VATSIM, vPilot, ntfy or Microsoft. It's for flight simulation only.
 
 ## License
 

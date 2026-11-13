@@ -1,0 +1,394 @@
+"""vPilot bridge: talks to the Clearway plugin running inside vPilot.
+
+The plugin polls ``GET /api/vpilot/outbox`` every second (heartbeat + commands for vPilot)
+and posts what happens in vPilot to ``POST /api/vpilot/event``. This mixin keeps the vPilot
+state for the Session: network connection, chats, nearby controllers and transponder.
+"""
+from __future__ import annotations
+
+import logging
+import math
+import threading
+import time
+
+log = logging.getLogger("clearway.vpilot")
+
+VPILOT_TIMEOUT = 8            # seconds without a plugin heartbeat before it counts as gone
+LONG_POLL = 4                 # the plugin's outbox request waits up to this long for a command
+VP_KINDS = {"pm", "radio", "broadcast", "selcal", "vinfo", "vsys"}
+FREQ = "FREQ"                 # chat id of the main frequency chat
+
+# vPilot dot commands that plugins can't perform (vPilot doesn't expose them)
+NOT_AVAILABLE = {
+    ".x": "setting the squawk code", ".xpdr": "setting the squawk code", ".xpndr": "setting the squawk code",
+    ".sq": "setting the squawk code", ".squawk": "setting the squawk code",
+    ".com1": "tuning COM1", ".com2": "tuning COM2", ".com": "choosing the transmit radio",
+    ".ctaf": "CTAF lookups", ".towerview": "tower view", ".aircraft": "the aircraft window",
+    ".debug": "the debug window", ".reloadrules": "reloading model rules",
+    ".ignore": "the ignore list", ".unignore": "the ignore list",
+}
+
+HELP = (".chat CALLSIGN · .msg CALLSIGN text · .close · .atis CALLSIGN · .wx/.metar ICAO · "
+        ".wallop text · .clear · .copy · .modec · .standby · .ident · .connect · .disconnect")
+
+
+def distance_nm(lat1, lon1, lat2, lon2) -> float:
+    r = 3440.065
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(min(1.0, math.sqrt(a)))
+
+
+class VpilotMixin:
+    """Mixed into Session. Expects: lock, messages, cfg, _add, _system, _bump, _find, _notify,
+    connect, status, callsign, position."""
+
+    def _vp_init(self) -> None:
+        self.vpilot_seen = 0.0
+        self.vpilot_connected = False
+        self.vpilot_callsign = ""
+        self.vp_controllers: list[dict] = []
+        self.vp_info: dict[str, dict] = {}       # controller callsign -> {lines, ts} (their controller info)
+        self._quiet_info: set[str] = set()       # info requested from the ATC list: show there, not in the chat
+        self.vp_modec: bool | None = None       # last Mode C state we set (vPilot can't report it)
+        self.outbox: list[dict] = []
+        self._next_out = 1
+        self._outbox_event = threading.Event()   # wakes a waiting plugin request instantly
+        self.com: dict | None = None             # COM radios, read by the MSFS panel
+
+    # ------------------------------------------------------------ plugin side
+    def vpilot_active(self) -> bool:
+        return time.time() - self.vpilot_seen < VPILOT_TIMEOUT
+
+    def vpilot_poll(self, connected: bool, callsign: str, cid: str) -> list[dict]:
+        """Heartbeat from the plugin; returns the commands it should run in vPilot.
+        When nothing is queued the request waits (up to LONG_POLL seconds), so a command
+        typed in Clearway reaches vPilot immediately instead of at the next poll."""
+        items = self._vpilot_take(connected, callsign)
+        if not items:
+            self._outbox_event.wait(LONG_POLL)
+            items = self._vpilot_take(connected, callsign)
+        return items
+
+    def _vpilot_take(self, connected: bool, callsign: str) -> list[dict]:
+        was_active = self.vpilot_active()
+        with self.lock:
+            self.vpilot_seen = time.time()
+            callsign = callsign.upper() if connected else ""
+            if not was_active or connected != self.vpilot_connected or callsign != self.vpilot_callsign:
+                self.vpilot_connected = connected
+                self.vpilot_callsign = callsign
+                self._bump()
+            now = time.time()
+            self._outbox_event.clear()
+            items = []
+            for item in self.outbox:
+                if not item.get("handed"):
+                    item["handed"] = now
+                    items.append({k: v for k, v in item.items() if k not in ("msg_id", "handed", "label")})
+            for item in [i for i in self.outbox if i.get("handed") and now - i["handed"] > 15]:
+                self._mark_outbox(item, False, "vPilot didn't confirm it.")
+        if not was_active:
+            log.info("vPilot plugin connected")
+            if connected:
+                self._maybe_auto_connect()
+        return items
+
+    def vpilot_sent(self, out_id: int, ok: bool, error: str) -> None:
+        with self.lock:
+            item = next((i for i in self.outbox if i["id"] == out_id), None)
+        if item:
+            self._mark_outbox(item, ok, error)
+
+    def _mark_outbox(self, item: dict, ok: bool, error: str = "") -> None:
+        with self.lock:
+            if item in self.outbox:
+                self.outbox.remove(item)
+            m = self._find(item["msg_id"]) if item.get("msg_id") else None
+            if m:
+                m["status"] = "none" if ok else "failed"
+                m["error"] = error
+            self._bump()
+        if not ok and not item.get("msg_id"):
+            self._system(f"{item.get('label', 'vPilot command')} failed: {error}", vp=True)
+
+    def vpilot_event(self, evt: dict) -> None:
+        kind = str(evt.get("type", ""))
+        sender = str(evt.get("from", "")).upper()
+        text = str(evt.get("message", "")).strip()
+        with self.lock:
+            self.vpilot_seen = time.time()
+        if kind == "connected":
+            with self.lock:
+                self.vpilot_connected = not evt.get("observer")
+                self.vpilot_callsign = str(evt.get("callsign", "")).upper()
+                self.vp_modec = None
+                self._bump()
+            # remember the details for the Connect button
+            self.cfg.update({"vpilot_callsign": self.vpilot_callsign,
+                             "vpilot_type": str(evt.get("type_code", "")),
+                             "vpilot_selcal": str(evt.get("selcal", ""))})
+            self._system(f"Connected to VATSIM as {self.vpilot_callsign}.", vp=True)
+            self._maybe_auto_connect()
+        elif kind == "disconnected":
+            with self.lock:
+                self.vpilot_connected = False
+                self.vp_controllers = []
+                self.vp_info = {}
+                self.vp_modec = None
+                self._bump()
+            self._system("Disconnected from VATSIM.", vp=True)
+        elif kind == "pm":
+            self._notify(self._add("in", "pm", sender, text, chat=sender))
+        elif kind == "broadcast":
+            self._notify(self._add("in", "broadcast", sender, text, chat=FREQ))
+        elif kind == "selcal":
+            freqs = str(evt.get("frequencies", ""))
+            msg = self._add("in", "selcal", sender, f"SELCAL alert{' on ' + freqs if freqs else ''}", chat=FREQ)
+            self._notify(msg, priority=5)
+        elif kind == "radio":
+            me = self.vpilot_callsign or self.callsign
+            mentioned = bool(me) and me in text.upper()
+            alert = mentioned or bool(self.cfg.get("vpilot_all_frequency"))
+            msg = self._add("in", "radio", sender, text, chat=FREQ, freq=str(evt.get("frequencies", "")),
+                            mention=mentioned, acked=not alert)
+            if alert:
+                self._notify(msg)
+        elif kind == "atis":
+            lines = [str(x) for x in (evt.get("lines") or [])]
+            with self.lock:
+                self.vp_info[sender] = {"lines": lines, "ts": time.time()}
+                quiet = sender in self._quiet_info
+                self._quiet_info.discard(sender)
+                self._bump()
+            if not quiet:   # typed .atis: show it in the frequency chat as before
+                body = "\n".join(lines) or "(no controller information)"
+                self._add("in", "vinfo", sender, body, chat=FREQ, acked=True)
+        elif kind == "metar":
+            self._add("in", "vinfo", "METAR", str(evt.get("metar", "")).strip(), chat=FREQ, acked=True)
+        elif kind == "controllers":
+            with self.lock:
+                self.vp_controllers = [
+                    {"callsign": str(c.get("callsign", "")).upper(), "frequency": str(c.get("frequency", "")),
+                     "lat": c.get("lat"), "lon": c.get("lon")}
+                    for c in (evt.get("list") or []) if isinstance(c, dict)
+                ]
+                self._bump()
+
+    def _maybe_auto_connect(self) -> None:
+        if (self.cfg.get("vpilot_auto_connect") and self.status in ("offline", "error")
+                and self.cfg.get("hoppie_logon") and self.vpilot_connected):
+            self._system("Connecting to Hoppie automatically (vPilot is online).")
+            self.connect()
+
+    # ------------------------------------------------------------ commands for vPilot
+    def _require_vpilot(self, connected: bool = True) -> None:
+        if not self.vpilot_active():
+            raise ValueError("The Clearway plugin for vPilot isn't running. Install it and restart vPilot.")
+        if connected and not self.vpilot_connected:
+            raise ValueError("vPilot isn't connected to VATSIM.")
+
+    def _queue(self, kind: str, msg_id: int | None = None, label: str = "", **fields) -> None:
+        with self.lock:
+            self.outbox.append({"id": self._next_out, "type": kind, "msg_id": msg_id, "label": label, **fields})
+            self._next_out += 1
+            self._bump()
+        self._outbox_event.set()
+
+    def send_text(self, kind: str, to: str, text: str, ack_id: int | None = None) -> None:
+        """Send a private message ("pm") or a frequency text message ("radio") through vPilot."""
+        self._require_vpilot()
+        text = " ".join(text.strip().split())
+        to = to.strip().upper()
+        if not text:
+            raise ValueError("Empty message.")
+        if kind == "pm" and not to:
+            raise ValueError("Enter who the message is for (a callsign).")
+        with self.lock:
+            me = self.vpilot_callsign or "YOU"
+            msg = self._add("out", kind, to if kind == "pm" else me, text, status="sending",
+                            chat=to if kind == "pm" else FREQ)
+            if ack_id is not None:
+                m = self._find(ack_id)
+                if m:
+                    m["acked"] = True
+                    m["reply"] = text
+        self._queue(kind, msg_id=msg["id"], to=to, text=text)
+
+    def vpilot_connect(self, callsign: str, type_code: str, selcal: str) -> None:
+        self._require_vpilot(connected=False)
+        if self.vpilot_connected:
+            raise ValueError("vPilot is already connected.")
+        callsign, type_code, selcal = callsign.strip().upper(), type_code.strip().upper(), selcal.strip().upper()
+        if not callsign or not type_code:
+            raise ValueError("Enter a callsign and an aircraft type.")
+        self.cfg.update({"vpilot_callsign": callsign, "vpilot_type": type_code, "vpilot_selcal": selcal})
+        self._queue("connect", label="Connect", callsign=callsign, type_code=type_code, selcal=selcal)
+        self._system(f"Connecting vPilot as {callsign}…", vp=True)
+
+    def vpilot_disconnect(self) -> None:
+        self._require_vpilot()
+        self._queue("disconnect", label="Disconnect")
+
+    def vpilot_modec(self, on: bool) -> None:
+        self._require_vpilot()
+        self._queue("modec", label="Mode C" if on else "Standby", on=bool(on))
+        with self.lock:
+            self.vp_modec = bool(on)
+            self._bump()
+
+    def vpilot_ident(self) -> None:
+        self._require_vpilot()
+        self._queue("ident", label="Ident")
+        self._system("Ident sent.", vp=True)
+
+    def vpilot_atis(self, callsign: str, quiet: bool = False) -> None:
+        """Ask a controller for their information. quiet=True (expanding them in the ATC list)
+        shows the answer in the list only, without adding it to the frequency chat."""
+        self._require_vpilot()
+        callsign = callsign.strip().upper()
+        if not callsign:
+            raise ValueError("Enter a controller callsign.")
+        if quiet:
+            with self.lock:
+                self._quiet_info.add(callsign)
+                self.vp_info.setdefault(callsign, {"lines": None, "ts": 0})["pending"] = True
+                self._bump()
+        self._queue("atis", label=f"Info request to {callsign}", callsign=callsign)
+        if not quiet:
+            self._system(f"Requesting controller information from {callsign}…", vp=True)
+
+    def vpilot_metar(self, station: str) -> None:
+        self._require_vpilot()
+        station = station.strip().upper()
+        if not station:
+            raise ValueError("Enter an airport code.")
+        self._queue("metar", label=f"METAR {station}", station=station)
+
+    def clear_chat(self, chat: str) -> None:
+        with self.lock:
+            removed = [m for m in self.messages if m.get("chat") == chat and m["kind"] in VP_KINDS]
+            self.messages = [m for m in self.messages if m not in removed]
+            self._to_trash(removed)
+            self._bump()
+
+    # ------------------------------------------------------------ dot commands
+    def vpilot_command(self, text: str, chat: str) -> dict:
+        """Run what was typed in a vPilot chat: plain text is sent, dot commands are executed.
+        Returns hints for the UI, e.g. {"open": "EGLL_TWR"}, {"close": True} or {"copy": True}."""
+        text = text.strip()
+        chat = (chat or FREQ).upper()
+        if not text:
+            raise ValueError("Type a message or a command.")
+        if not text.startswith("."):
+            if chat == FREQ:
+                self.send_text("radio", "", text)
+            else:
+                self.send_text("pm", chat, text)
+            return {}
+
+        parts = text.split(None, 2)
+        cmd = parts[0].lower()
+        arg1 = parts[1] if len(parts) > 1 else ""
+        rest = text.split(None, 1)[1] if len(parts) > 1 else ""
+        if cmd in NOT_AVAILABLE:
+            raise ValueError(f"vPilot doesn't let plugins control {NOT_AVAILABLE[cmd]}. Use {cmd} in vPilot's own window.")
+        if cmd == ".chat":
+            if not arg1:
+                raise ValueError("Usage: .chat CALLSIGN")
+            return {"open": arg1.upper()}
+        if cmd == ".msg":
+            if len(parts) < 3:
+                raise ValueError("Usage: .msg CALLSIGN message")
+            self.send_text("pm", arg1, parts[2])
+            return {"open": arg1.upper()}
+        if cmd == ".close":
+            return {"close": True}
+        if cmd == ".clear":
+            self.clear_chat(chat)
+            return {}
+        if cmd == ".copy":
+            return {"copy": True}
+        if cmd == ".atis":
+            self.vpilot_atis(arg1)
+            return {}
+        if cmd in (".wx", ".metar"):
+            self.vpilot_metar(arg1)
+            return {}
+        if cmd == ".wallop":
+            if not rest:
+                raise ValueError("Usage: .wallop message")
+            self._require_vpilot()
+            with self.lock:
+                msg = self._add("out", "pm", "SUPERVISORS", rest, status="sending", chat=FREQ)
+            self._queue("pm", msg_id=msg["id"], to="*S", text=rest)
+            return {}
+        if cmd in (".modec", ".c"):
+            self.vpilot_modec(True)
+            return {}
+        if cmd in (".standby", ".sby"):
+            self.vpilot_modec(False)
+            return {}
+        if cmd == ".ident":
+            self.vpilot_ident()
+            return {}
+        if cmd == ".disconnect":
+            self.vpilot_disconnect()
+            return {}
+        if cmd == ".connect":
+            words = text.split()[1:]
+            cs = words[0] if words else self.cfg.get("vpilot_callsign")
+            tc = words[1] if len(words) > 1 else self.cfg.get("vpilot_type")
+            sc = words[2] if len(words) > 2 else self.cfg.get("vpilot_selcal")
+            self.vpilot_connect(cs or "", tc or "", sc or "")
+            return {}
+        if cmd in (".help", ".?"):
+            self._system("Commands: " + HELP, vp=True)
+            return {}
+        raise ValueError(f"Unknown command {cmd}. Type .help for the list.")
+
+    def set_com(self, data: dict) -> None:
+        """COM radio state from the MSFS panel (vPilot doesn't share it with plugins)."""
+        def radio(n):
+            return {"active": str(data.get(f"com{n}", "")), "standby": str(data.get(f"com{n}_stby", "")),
+                    "tx": bool(data.get(f"com{n}_tx"))}
+        with self.lock:
+            new = {"com1": radio(1), "com2": radio(2)}
+            changed = not self.com or {k: v for k, v in self.com.items() if k != "ts"} != new
+            self.com = {**new, "ts": time.time()}
+            if changed:
+                self._bump()
+
+    # ------------------------------------------------------------ snapshot
+    def vpilot_snapshot(self) -> dict:
+        pos = self.position
+        ctrls = []
+        for c in self.vp_controllers:
+            item = dict(c)
+            if pos and c.get("lat") is not None and c.get("lon") is not None:
+                try:
+                    item["distance"] = round(distance_nm(pos["lat"], pos["lon"], float(c["lat"]), float(c["lon"])))
+                except (TypeError, ValueError):
+                    pass
+            item.pop("lat", None)
+            item.pop("lon", None)
+            info = self.vp_info.get(c["callsign"])
+            if info:
+                item["info"] = info.get("lines")
+                item["info_age"] = int(time.time() - info["ts"]) if info.get("ts") else None
+                item["info_pending"] = bool(info.get("pending")) and info.get("lines") is None
+            ctrls.append(item)
+        ctrls.sort(key=lambda c: (c.get("distance", 99999), c["callsign"]))
+        return {
+            "active": self.vpilot_active(),
+            # without a plugin heartbeat the last known state is stale: report "not connected"
+            "connected": self.vpilot_connected and self.vpilot_active(),
+            "callsign": self.vpilot_callsign if self.vpilot_active() else "",
+            "modec": self.vp_modec,
+            "com": ({k: v for k, v in self.com.items() if k != "ts"}
+                    if self.com and time.time() - self.com["ts"] < 15 else None),
+            "controllers": ctrls,
+            "last": {"callsign": self.cfg.get("vpilot_callsign") or "", "type": self.cfg.get("vpilot_type") or "",
+                     "selcal": self.cfg.get("vpilot_selcal") or ""},
+        }

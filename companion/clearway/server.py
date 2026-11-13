@@ -103,6 +103,12 @@ class Handler(BaseHTTPRequestHandler):
             if not self._is_local():
                 snap["settings"].pop("port", None)
             return self._json(snap)
+        if url.path == "/api/vpilot/outbox":
+            if not self._is_local():
+                return self._json({"error": "only available on this PC"}, 403)
+            q = lambda k: (query.get(k) or [""])[0]  # noqa: E731
+            items = self.session.vpilot_poll(q("connected") == "1", q("callsign"), q("cid"))
+            return self._json({"ok": True, "items": items})
         if url.path.startswith("/api/"):
             return self._json({"error": "not found"}, 404)
         return self._static(url.path)
@@ -117,6 +123,8 @@ class Handler(BaseHTTPRequestHandler):
         action = url.path[len("/api/"):]
         body = self._read_body()
         s = self.session
+        if action.startswith("vpilot/") and not self._is_local():
+            return self._json({"error": "only available on this PC"}, 403)
         try:
             if action == "quick":            # tapped button on a phone notification
                 s.reply(int(query["id"][0]), query["r"][0])
@@ -127,7 +135,8 @@ class Handler(BaseHTTPRequestHandler):
             elif action == "reply":
                 s.reply(int(body["id"]), str(body.get("text", "")))
             elif action == "ack":
-                s.ack(int(body["id"]) if body.get("id") is not None else None)
+                s.ack(int(body["id"]) if body.get("id") is not None else None,
+                      chat=str(body["chat"]).upper() if body.get("chat") else None, scope=body.get("scope"))
             elif action == "logon":
                 s.logon(str(body.get("station", "")))
             elif action == "logoff":
@@ -140,6 +149,32 @@ class Handler(BaseHTTPRequestHandler):
                 s.inforeq(str(body.get("what", "")), str(body.get("icao", "")))
             elif action == "clear":
                 s.clear_history()
+            elif action == "vpilot/event":         # from the vPilot plugin
+                s.vpilot_event(body)
+            elif action == "vpilot/sent":
+                s.vpilot_sent(int(body["id"]), bool(body.get("ok")), str(body.get("error", "")))
+            elif action == "text":                 # send a private / frequency message through vPilot
+                s.send_text(str(body.get("kind", "pm")), str(body.get("to", "")), str(body.get("text", "")))
+            elif action == "vp/command":           # what was typed in a vPilot chat (text or dot command)
+                hints = s.vpilot_command(str(body.get("text", "")), str(body.get("chat", "FREQ")))
+                return self._json({"ok": True, "version": s.version, **hints})
+            elif action == "vp/connect":
+                s.vpilot_connect(str(body.get("callsign", "")), str(body.get("type_code", "")), str(body.get("selcal", "")))
+            elif action == "vp/disconnect":
+                s.vpilot_disconnect()
+            elif action == "vp/modec":
+                s.vpilot_modec(bool(body.get("on", True)))
+            elif action == "vp/ident":
+                s.vpilot_ident()
+            elif action == "vp/atis":
+                s.vpilot_atis(str(body.get("callsign", "")), quiet=bool(body.get("quiet")))
+            elif action == "vp/clear":
+                s.clear_chat(str(body.get("chat", "FREQ")).upper())
+            elif action == "com":                  # COM radios from the MSFS panel
+                s.panel_seen = time.time()
+                s.set_com(body)
+            elif action == "notes":
+                s.save_notes(str(body.get("text", "")))
             elif action == "delete":
                 s.delete(int(body["id"]))
             elif action == "restore":
