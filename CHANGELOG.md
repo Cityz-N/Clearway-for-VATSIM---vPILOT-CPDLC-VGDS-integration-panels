@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0
+
+- The Windows companion is now a normal program folder (Clearway.exe + _internal) instead of a single self-extracting exe, and carries proper file details (product, version, description). This avoids most antivirus false positives that the self-extracting format triggered
+- Releases now include the all-in-one zip (MSFS panel + companion + vPilot plugin) built automatically
+
+## 0.4.1
+
+- MSFS panel: text fields (notepad, chat, requests) give the keyboard and mouse back to the sim as soon as the mouse leaves the card, on Esc, or when collapsing; previously the sim stayed blocked
+- MSFS panel: the idle icon is fainter (12%) and grey; colour comes back on hover
+- Nearby ATC: an arrow on each controller expands their information in place (no more double-click; nothing added to the frequency chat)
+- Phone instructions now cover Android as well as iPhone (the phone app works on both)
+- Phone: VDGS button in the vPilot tab opens the official VDGS page (vats.im/vdgs) for TOBT/TSAT and start-up times
+- Fixed: the vPilot tab kept showing 'connected' after vPilot or its plugin had closed
+
 ## 0.4.0
 
 - Commands and messages reach vPilot in about 30 ms instead of up to a second (Mode C, standby, ident, chat)
@@ -9,11 +23,6 @@
 - MSFS panel: the floating icon fades when there is nothing to read
 - MSFS panel: fixed symbols that showed as boxes in the sim's font (x, ..., arrows)
 - Clearance form: 'Aircraft type' label, prefilled from vPilot
-- MSFS panel: text fields (notepad, chat, requests) give the keyboard and mouse back to the sim as soon as the mouse leaves the card, on Esc, or when collapsing; previously the sim stayed blocked
-- MSFS panel: the idle icon is fainter (12%) and grey; colour comes back on hover
-- Nearby ATC: an arrow on each controller expands their information in place (no more double-click; nothing added to the frequency chat)
-- Phone: VDGS button in the vPilot tab opens the official VDGS page (vats.im/vdgs) for TOBT/TSAT and start-up times
-- Fixed: the vPilot tab kept showing 'connected' after vPilot or its plugin had closed
 - Fixed: v0.3.0 panel card stretched across the screen and wasn't clickable
 
 ## 0.3.0

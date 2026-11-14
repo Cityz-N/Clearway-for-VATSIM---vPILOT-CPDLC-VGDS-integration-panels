@@ -59,7 +59,7 @@
           <div class="seg xpdr" id="vpXpdr"><button data-v="sby">Standby</button><button data-v="c">Mode C</button></div>
           <button class="ghost" id="vpIdent">Ident</button>
           <button class="ghost" id="vpAtcBtn">Nearby ATC <span class="muted" id="vpAtcCount"></span></button>
-          <!-- official VDGS / CDM page (TOBT, TSAT, start-up window); opens in Safari for the VATSIM login -->
+          <!-- official VDGS / CDM page (TOBT, TSAT, start-up window); opens in the phone's browser for the VATSIM login -->
           <a class="ghost vdgs-link" id="vpVdgs" href="https://vats.im/vdgs" target="_blank" rel="noopener">VDGS
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
         </div>
@@ -272,7 +272,7 @@
         <div class="toggle-row"><span>Send notifications to my phone</span><label class="switch"><input type="checkbox" id="setNtfy"><i></i></label></div>
         <div class="toggle-row"><span>Mute phone while the MSFS panel is open <span class="muted" id="panelState"></span></span><label class="switch"><input type="checkbox" id="setMute"><i></i></label></div>
         <ol class="steps">
-          <li>Install the free <b>ntfy</b> app from the App Store.</li>
+          <li>Install the free <b>ntfy</b> app (App Store or Google Play).</li>
           <li>Tap <b>+</b> and subscribe to this topic (server: ntfy.sh):</li>
         </ol>
         <div class="topic">
@@ -287,8 +287,8 @@
       </div>
 
       <div class="card" id="pairCard" hidden>
-        <h2>Pair your iPhone</h2>
-        <p class="muted small-text">Your phone must be on the same Wi-Fi as this PC. Scan with the iPhone camera, then in Safari tap <b>Share → Add to Home Screen</b>.</p>
+        <h2>Pair your phone</h2>
+        <p class="muted small-text">Your phone must be on the same Wi-Fi as this PC. Scan the code with the phone's camera, then add the page to your home screen: on iPhone, Safari <b>Share → Add to Home Screen</b>; on Android, Chrome <b>⋮ → Add to Home screen</b>.</p>
         <div class="qr" id="pairQr"></div>
         <code class="mono pair-url" id="pairUrl"></code>
       </div>

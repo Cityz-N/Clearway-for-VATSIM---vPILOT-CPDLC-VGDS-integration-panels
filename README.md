@@ -1,16 +1,16 @@
 # Clearway
 
-**CPDLC for VATSIM on your iPhone and inside Microsoft Flight Simulator.** Free, no accounts, no Mac needed.
+**CPDLC and vPilot for VATSIM on your phone and inside Microsoft Flight Simulator.** Free, no accounts, no Mac needed.
 
 Clearway is a small companion program for Windows that connects to the [Hoppie ACARS](https://www.hoppie.nl/acars/) network. It lets you read and answer CPDLC messages from:
 
-- 📱 **your iPhone**: a clean web app on your home screen, plus lock-screen notifications through the free [ntfy](https://ntfy.sh) app
+- 📱 **your phone** (iPhone or Android): a clean web app on your home screen, plus lock-screen notifications through the free [ntfy](https://ntfy.sh) app
 - ✈️ **an in-game MSFS toolbar panel**: a small floating icon you can put anywhere on screen. It flashes when a message arrives and stays amber until you answer.
 
 You can use both at the same time; they stay in sync.
 
 <p align="center">
-  <img src="docs/phones.png" width="640" alt="Clearway on the iPhone: vPilot tab and CPDLC tab">
+  <img src="docs/phones.png" width="640" alt="Clearway on a phone: vPilot tab and CPDLC tab">
 </p>
 <p align="center">
   <img src="docs/panel-vpilot.png" width="400" alt="MSFS panel, vPilot tab">
@@ -42,8 +42,8 @@ You can use both at the same time; they stay in sync.
 ```
  Hoppie ACARS  ◄──►  Clearway (your PC)  ◄──►  MSFS panel  (localhost)
                          │      ▲
-                         │      └──────────►  iPhone web app (home Wi-Fi)
-                         └──► ntfy.sh ─────►  iPhone lock-screen notifications
+                         │      └──────────►  phone web app (home Wi-Fi) 
+                         └──► ntfy.sh ─────►  phone lock-screen notifications
 ```
 
 Only the companion talks to Hoppie, so the phone and the panel never compete for messages. Your Hoppie logon code stays on your PC. Notifications contain only the message text.
@@ -52,19 +52,19 @@ Only the companion talks to Hoppie, so the phone and the panel never compete for
 
 ### 1. The companion (Windows)
 
-1. Download `Clearway.exe` from the [Releases](../../releases) page and run it. There is no window: Clearway runs as an icon in the notification area next to the clock. **Double-click** the icon to open it; **right-click** it to connect, disconnect or quit. Keep it running while you fly.
+1. Download **`Clearway-for-VATSIM-<version>.zip`** from the [Releases](../../releases) page and extract it into your MSFS **Community** folder. Then run `Clearway companion\Clearway.exe` inside it (keep the `_internal` folder next to it). Not using MSFS? Download `Clearway-companion.zip` instead and extract it anywhere. There is no window: Clearway runs as an icon in the notification area next to the clock. **Double-click** the icon to open it; **right-click** it to connect, disconnect or quit. Keep it running while you fly.
 2. Windows Firewall will ask about network access. Allow **Private networks**, so your phone can reach it.
 3. The first time, your browser opens on `http://localhost:8787` (later, double-click the tray icon). Go to **Settings** and enter:
    - your **Hoppie logon code** (get one free at [hoppie.nl/acars](https://www.hoppie.nl/acars/system/register.html))
    - your **VATSIM CID**
 4. Connect to VATSIM with your pilot client, then press **Connect**.
 
-### 2. Your iPhone
+### 2. Your phone (iPhone or Android)
 
 1. Make sure the phone is on the same Wi-Fi as the PC.
-2. In Clearway on the PC, open **Settings** and scan the **Pair your iPhone** QR code with the iPhone camera.
-3. In Safari, tap **Share → Add to Home Screen**.
-4. For notifications, install **ntfy** from the App Store (free, no account). Tap **+** and subscribe to the topic shown in Clearway's Settings. Press **Send test** to check.
+2. In Clearway on the PC, open **Settings** and scan the **Pair your phone** QR code with the phone's camera.
+3. Add the page to your home screen: on iPhone, Safari **Share → Add to Home Screen**; on Android, Chrome **⋮ → Add to Home screen**.
+4. For notifications, install **ntfy** from the App Store or Google Play (free, no account). Tap **+** and subscribe to the topic shown in Clearway's Settings. Press **Send test** to check.
 
 > Notifications arrive anywhere, but replying from the phone needs your home Wi-Fi.
 
@@ -118,12 +118,11 @@ To test without the real network, run against a fake Hoppie server:
 python tools/dev_run.py
 ```
 
-To build the exe:
+To build the Windows app (`dist/Clearway/`, an exe with its support folder):
 
 ```bash
-pip install pyinstaller
-cd companion
-pyinstaller --onefile --name Clearway --noconsole --icon web/clearway.ico --add-data "web;web" clearway_app.py
+pip install pyinstaller==6.11.1
+python tools/build_exe.py
 ```
 
 For the MSFS panel you need the free MSFS SDK. The SDK's package tool briefly starts the sim to compile the panel:
@@ -144,6 +143,8 @@ dotnet build -c Release
 Copy the result to `vpilot-plugin/compiled/` and commit it, so releases can include it.
 
 Releases are built by GitHub Actions when you push a tag such as `v0.1.0`.
+
+For sites like flightsim.to, `python tools/make_release_zip.py` builds one all-in-one zip: a `clearway-panel` folder for the Community folder, with `Clearway companion\` (the exe, the vPilot plugin and a quick-start guide) inside it.
 
 ## Project layout
 
