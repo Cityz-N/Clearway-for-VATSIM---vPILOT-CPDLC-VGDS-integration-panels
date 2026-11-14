@@ -426,3 +426,29 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
   background-color: var(--mint-soft); color: var(--mint);
   font-family: "Consolas", monospace; font-size: 0.8em; line-height: 1.4em; white-space: pre-wrap;
 }
+
+/* shown while a text field holds the sim's keyboard */
+.cw-kbd {
+  margin-right: 0.4em; padding: 0.2em 0.55em; border-radius: 0.5em; cursor: pointer;
+  background-color: var(--vp-soft); color: var(--vp); font-size: 0.72em; font-weight: bold; letter-spacing: 0.05em;
+}
+
+/* clock in the header: UTC (cyan), sim time (amber), local time (mint) */
+.cw-clock {
+  margin-right: 0.35em; padding: 0.2em 0.45em; border-radius: 0.45em; cursor: pointer; white-space: nowrap;
+  font-family: "Consolas", monospace; font-size: 0.8em; font-weight: bold;
+}
+.cw-clock:hover { background-color: var(--surface-2); }
+.cw-clock.utc { color: var(--vp); }
+.cw-clock.sim { color: var(--amber); }
+.cw-clock.local { color: var(--mint); }
+
+/* lock: shackle closes and turns cyan when the card direction is locked */
+#cw-lock svg rect { fill: none; }
+#cw-lock.on svg { stroke: var(--vp); }
+#cw-lock .cw-shackle-closed { display: none; }
+#cw-lock.on .cw-shackle-closed { display: inline; }
+#cw-lock.on .cw-shackle-open { display: none; }
+
+/* header items never wrap */
+.cw-kbd, .cw-clock, .cw-tab { white-space: nowrap; flex-shrink: 0; }

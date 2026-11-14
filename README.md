@@ -52,7 +52,7 @@ Only the companion talks to Hoppie, so the phone and the panel never compete for
 
 ### 1. The companion (Windows)
 
-1. Download **`Clearway-for-VATSIM-<version>.zip`** from the [Releases](../../releases) page and extract it into your MSFS **Community** folder. Then run `Clearway companion\Clearway.exe` inside it (keep the `_internal` folder next to it). Not using MSFS? Download `Clearway-companion.zip` instead and extract it anywhere. There is no window: Clearway runs as an icon in the notification area next to the clock. **Double-click** the icon to open it; **right-click** it to connect, disconnect or quit. Keep it running while you fly.
+1. Download **`Clearway-for-VATSIM-<version>.zip`** from the [Releases](../../releases) page and extract it into your MSFS **Community** folder. Then run `Clearway companion\Clearway.exe` inside it (keep the `_internal` folder next to it). Not using MSFS? Just take the `Clearway companion` folder out of the zip and put it anywhere (on GitHub releases there's also a separate `Clearway-companion.zip`). There is no window: Clearway runs as an icon in the notification area next to the clock. **Double-click** the icon to open it; **right-click** it to connect, disconnect or quit. Keep it running while you fly.
 2. Windows Firewall will ask about network access. Allow **Private networks**, so your phone can reach it.
 3. The first time, your browser opens on `http://localhost:8787` (later, double-click the tray icon). Go to **Settings** and enter:
    - your **Hoppie logon code** (get one free at [hoppie.nl/acars](https://www.hoppie.nl/acars/system/register.html))

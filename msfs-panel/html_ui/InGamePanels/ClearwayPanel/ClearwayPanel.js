@@ -208,6 +208,7 @@
     renderVpilot();
     renderCpdlc();
     renderNotes();
+    if (expanded) placeCard();
   }
 
   function setDot(id, n) {
@@ -406,6 +407,7 @@
       if (!ok) return;
       input.value = "";
       autoGrow(input);
+      input.focus();   // keep typing after Send (clicking the button took the focus away)
       if (data.open) openChat(data.open);
       if (data.close) closeChat(activeChat);
       if (data.copy) hint("Copy isn't available in the sim; use the phone or PC page.", true, "cw-vp-hint");
@@ -646,14 +648,64 @@
     placeCard();
   }
 
+  // The card opens towards the middle of the screen: right or left of the icon, and downwards
+  // from a top-half icon or upwards from a bottom-half icon. The lock button freezes the direction.
+  var placementLock = null;   // null, or { right: bool, down: bool }
+  function cardDirection() {
+    if (placementLock) return placementLock;
+    var b = el("cw-bubble"), bs = b.offsetWidth || 48;
+    return { right: b.offsetLeft + bs / 2 < window.innerWidth / 2, down: b.offsetTop + bs / 2 < window.innerHeight / 2 };
+  }
+
   function placeCard() {
     var b = el("cw-bubble"), c = el("cw-card");
     var bx = b.offsetLeft, by = b.offsetTop, bs = b.offsetWidth || 48;
     var cw = c.offsetWidth || 350, ch = c.offsetHeight || 300, gap = 10 * scale;
-    var x = bx + bs / 2 < window.innerWidth / 2 ? bx + bs + gap : bx - cw - gap;   // open towards the middle
-    var y = Math.max(4, Math.min(window.innerHeight - ch - 4, by));
+    var d = cardDirection();
+    var x = d.right ? bx + bs + gap : bx - cw - gap;
+    var y = d.down ? by : by + bs - ch;            // upwards: bottom of the card level with the icon
+    x = Math.max(4, Math.min(window.innerWidth - cw - 4, x));
+    y = Math.max(4, Math.min(window.innerHeight - ch - 4, y));
     c.style.left = x + "px";
     c.style.top = y + "px";
+  }
+
+  function toggleLock() {
+    placementLock = placementLock ? null : cardDirection();
+    save("CLEARWAY_LOCK", placementLock);
+    updateLockButton();
+    placeCard();
+  }
+
+  function updateLockButton() {
+    var btn = el("cw-lock");
+    btn.classList.toggle("on", !!placementLock);
+    btn.title = placementLock ? "Card direction locked (click to unlock)" : "Lock where the card opens";
+  }
+
+  // ------------------------------------------------------------ clock: UTC / sim time / local
+  var CLOCK_MODES = ["utc", "sim", "local"];
+  var clockMode = "utc";
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function updateClock() {
+    var text, d = new Date();
+    if (clockMode === "utc") {
+      text = pad2(d.getUTCHours()) + ":" + pad2(d.getUTCMinutes()) + ":" + pad2(d.getUTCSeconds()) + "z";
+    } else if (clockMode === "local") {
+      text = pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds()) + " LT";
+    } else {
+      var secs = null;
+      try { if (typeof SimVar !== "undefined") secs = SimVar.GetSimVarValue("E:ZULU TIME", "seconds"); } catch (e) { secs = null; }
+      if (typeof secs === "number" && !isNaN(secs)) {
+        secs = Math.floor(secs) % 86400;
+        text = pad2(Math.floor(secs / 3600)) + ":" + pad2(Math.floor(secs / 60) % 60) + ":" + pad2(secs % 60) + " SIM";
+      } else {
+        text = "--:--:-- SIM";
+      }
+    }
+    var c = el("cw-clock");
+    c.textContent = text;
+    c.className = "cw-clock " + clockMode;
   }
 
   function setExpanded(v) {
@@ -669,7 +721,7 @@
     var startX, startY, originX, originY, moved;
     handle.addEventListener("mousedown", function (e) {
       if (e.button !== 0) return;
-      if (up(e.target, ".cw-icon-btn") || up(e.target, ".cw-tab")) return;
+      if (up(e.target, ".cw-icon-btn") || up(e.target, ".cw-tab") || up(e.target, ".cw-clock") || up(e.target, ".cw-kbd")) return;
       var b = el("cw-bubble");
       startX = e.clientX; startY = e.clientY;
       originX = b.offsetLeft; originY = b.offsetTop;
@@ -696,26 +748,35 @@
   }
 
   // While a text field has focus the sim sends the keyboard to the panel (so typing doesn't
-  // trigger sim shortcuts). Clicks outside the card go straight to the cockpit and never reach
-  // the panel, so the field would keep the keyboard forever: give it back as soon as the mouse
-  // leaves the card, on Esc, when collapsing/switching tabs, or when the field disappears.
+  // trigger sim shortcuts). Joysticks, yokes and other controllers are not affected.
+  // The field keeps the keyboard while its cursor blinks, even if the mouse moves away.
+  // It gives it back when the panel loses focus (e.g. a click in the cockpit), on Esc,
+  // when collapsing/switching tabs, or when the field disappears.
   var keyboardOwner = null;   // id of the field that currently holds the sim's keyboard
   function releaseKeyboard() {
     var a = document.activeElement;
     if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA") && up(a, "#cw-root")) a.blur();
     if (keyboardOwner && typeof Coherent !== "undefined") Coherent.trigger("UNFOCUS_INPUT_FIELD", keyboardOwner);
     keyboardOwner = null;
+    showTyping(false);
+  }
+
+  function showTyping(on) {
+    var k = el("cw-kbd");
+    if (k) k.classList.toggle("hidden", !on);
   }
 
   function wireInput(input, onEnter) {
     input.addEventListener("focus", function () {
       keyboardOwner = input.id;
+      showTyping(true);
       if (typeof Coherent !== "undefined") Coherent.trigger("FOCUS_INPUT_FIELD", input.id, "", "", "", false);
     });
     input.addEventListener("blur", function () {
       if (keyboardOwner === input.id) {
         if (typeof Coherent !== "undefined") Coherent.trigger("UNFOCUS_INPUT_FIELD", input.id);
         keyboardOwner = null;
+        showTyping(false);
       }
     });
     var lastEnter = 0;
@@ -753,8 +814,25 @@
 
     makeDraggable(el("cw-bubble"), function () { setExpanded(!expanded); });
     makeDraggable(el("cw-head"), null);
-    // leaving the card gives the keyboard (and mouse) back to the sim
-    el("cw-card").addEventListener("mouseleave", releaseKeyboard);
+    placementLock = load("CLEARWAY_LOCK", null);
+    updateLockButton();
+    el("cw-lock").addEventListener("click", toggleLock);
+    clockMode = load("CLEARWAY_CLOCK", "utc");
+    if (CLOCK_MODES.indexOf(clockMode) < 0) clockMode = "utc";
+    el("cw-clock").addEventListener("click", function () {
+      clockMode = CLOCK_MODES[(CLOCK_MODES.indexOf(clockMode) + 1) % CLOCK_MODES.length];
+      save("CLEARWAY_CLOCK", clockMode);
+      updateClock();
+    });
+    updateClock();
+    setInterval(updateClock, 1000);
+    // the panel losing focus (a click in the cockpit, another window) gives the keyboard back;
+    // moving the mouse alone does not
+    window.addEventListener("blur", releaseKeyboard);
+    document.addEventListener("visibilitychange", function () { if (document.hidden) releaseKeyboard(); });
+    var uiFrame = document.querySelector("ingame-ui");
+    if (uiFrame) uiFrame.addEventListener("panelInactive", releaseKeyboard);
+    el("cw-kbd").addEventListener("click", releaseKeyboard);
     el("cw-min").addEventListener("click", function () { setExpanded(false); });
     el("cw-head").addEventListener("click", function (e) {
       var t = up(e.target, ".cw-tab");

@@ -11,6 +11,8 @@ import math
 import threading
 import time
 
+from .textfix import repair
+
 log = logging.getLogger("clearway.vpilot")
 
 VPILOT_TIMEOUT = 8            # seconds without a plugin heartbeat before it counts as gone
@@ -116,7 +118,7 @@ class VpilotMixin:
     def vpilot_event(self, evt: dict) -> None:
         kind = str(evt.get("type", ""))
         sender = str(evt.get("from", "")).upper()
-        text = str(evt.get("message", "")).strip()
+        text = repair(str(evt.get("message", "")).strip())     # "Ã©" -> "é"
         with self.lock:
             self.vpilot_seen = time.time()
         if kind == "connected":
@@ -156,7 +158,7 @@ class VpilotMixin:
             if alert:
                 self._notify(msg)
         elif kind == "atis":
-            lines = [str(x) for x in (evt.get("lines") or [])]
+            lines = [repair(str(x)) for x in (evt.get("lines") or [])]
             with self.lock:
                 self.vp_info[sender] = {"lines": lines, "ts": time.time()}
                 quiet = sender in self._quiet_info

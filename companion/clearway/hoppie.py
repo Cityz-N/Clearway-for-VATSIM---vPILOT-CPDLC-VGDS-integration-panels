@@ -10,6 +10,8 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
+from .textfix import decode_bytes, repair
+
 USER_AGENT = "Clearway-CPDLC/1.0"
 TIMEOUT = 15  # seconds, as requested by the Hoppie documentation
 
@@ -79,14 +81,14 @@ class HoppieClient:
             "to": to,
             "type": kind,
             "packet": packet,
-        }).encode()
+        }, encoding="cp1252", errors="replace").encode()   # Hoppie clients use Western-European text
         req = urllib.request.Request(self.url, data=body, headers={
             "User-Agent": USER_AGENT,
             "Content-Type": "application/x-www-form-urlencoded",
         })
         try:
             with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-                text = resp.read().decode("utf-8", errors="replace")
+                text = repair(decode_bytes(resp.read()))   # accents: UTF-8 or Windows-1252
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise HoppieError(f"network error: {exc}") from exc
         return parse_response(text)

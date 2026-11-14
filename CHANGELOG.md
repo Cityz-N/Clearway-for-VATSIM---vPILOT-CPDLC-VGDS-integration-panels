@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- MSFS panel: the card opens towards the middle of the screen vertically too (bottom-left icon: card opens up and to the right; bottom-right: up and to the left)
+- MSFS panel: padlock button next to the notepad locks the direction the card opens
+- MSFS panel: clock in the top bar - UTC by default; click to switch to sim time and local time (each in its own colour)
+- Accented letters (é, à, ç, ü...) now display correctly in received messages: Clearway reads both UTF-8 and Western-European text from Hoppie and repairs the classic "Ã©" mix-up in vPilot messages. Messages to Hoppie are sent in the same Western-European encoding
+- MSFS panel: a text field keeps the keyboard while its cursor blinks, even when the mouse moves away. It is released by a click elsewhere (the panel losing focus), Esc, collapsing the card or switching tabs. A TYPING badge shows while the keyboard goes to Clearway (click it to release). Controllers are not affected
+- MSFS panel: the cursor stays in the message box after Send
+
 ## 0.5.0
 
 - The Windows companion is now a normal program folder (Clearway.exe + _internal) instead of a single self-extracting exe, and carries proper file details (product, version, description). This avoids most antivirus false positives that the self-extracting format triggered
