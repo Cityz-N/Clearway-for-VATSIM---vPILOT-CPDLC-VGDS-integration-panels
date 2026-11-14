@@ -18,11 +18,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build Clearway.exe
-        working-directory: companion
+      - name: Build Clearway companion
         run: |
           pip install pyinstaller==6.11.1
-          pyinstaller --onefile --name Clearway --noconsole --icon web/clearway.ico --add-data "web;web" clearway_app.py
+          python tools/build_exe.py
 
       - name: Package MSFS panel
         shell: pwsh
@@ -41,12 +40,21 @@ jobs:
             Compress-Archive -Path vpilot-plugin/compiled/Clearway.vPilot.dll -DestinationPath clearway-vpilot-plugin.zip
           }
 
+      - name: All-in-one zip (Community folder + companion + vPilot plugin)
+        shell: pwsh
+        run: |
+          if ((Test-Path msfs-panel/compiled/clearway-panel.spb) -and (Test-Path vpilot-plugin/compiled/Clearway.vPilot.dll)) {
+            python tools/make_release_zip.py
+          }
+          Compress-Archive -Path dist/Clearway -DestinationPath Clearway-companion.zip
+
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            companion/dist/Clearway.exe
+            dist/Clearway-for-VATSIM-*.zip
+            Clearway-companion.zip
             clearway-panel.zip
             clearway-vpilot-plugin.zip
           fail_on_unmatched_files: false
@@ -57,7 +65,8 @@ jobs:
         with:
           name: clearway
           path: |
-            companion/dist/Clearway.exe
+            dist/Clearway-for-VATSIM-*.zip
+            Clearway-companion.zip
             clearway-panel.zip
             clearway-vpilot-plugin.zip
           if-no-files-found: warn
