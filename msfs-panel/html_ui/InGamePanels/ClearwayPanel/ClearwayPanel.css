@@ -462,3 +462,29 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 .cw-tick:hover { background-color: var(--mint); }
 .cw-ti { width: 1.05em; height: 1.05em; stroke: var(--mint); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .cw-tick:hover .cw-ti { stroke: var(--bg); }
+
+/* ================= v0.7: right click peek ================= */
+#cw-peek {
+  position: absolute; left: 100px; top: 200px;
+  width: 21em;
+  background-color: var(--bg);
+  border-radius: 0.9em;
+  border: 1px solid var(--line);
+  border-left: 0.3em solid var(--cp);
+  box-shadow: 0 0.6em 2.4em var(--shadow);
+  padding: 0.6em 0.8em 0.7em;
+  pointer-events: auto; cursor: pointer;
+  z-index: 5;
+}
+#cw-peek.vp { border-left-color: var(--vp); }
+.cw-peek-head { display: flex; align-items: center; color: var(--muted); font-size: 0.9em; }
+.cw-peek-head .cw-station { flex-grow: 1; margin-left: 0.5em; }
+.cw-peek-kind { font-weight: bold; font-size: 0.85em; padding: 0.1em 0.5em; border-radius: 0.7em; background-color: var(--amber-soft); color: var(--cp); }
+#cw-peek.vp .cw-peek-kind { background-color: var(--vp-soft); color: var(--vp); }
+.cw-peek-text { margin-top: 0.4em; line-height: 1.35em; max-height: 9.5em; overflow: hidden; word-wrap: break-word; }
+.cw-peek-text.mono { font-family: "Consolas", monospace; }
+.cw-peek-foot { margin-top: 0.45em; font-size: 0.85em; color: var(--muted); }
+.cw-peek-foot.unread { color: var(--amber); }
+#cw-peek .cw-actions { margin-top: 0.5em; }
+.cw-peek-foot.sent { color: var(--mint); }
+#cw-peek-state:empty { display: none; }

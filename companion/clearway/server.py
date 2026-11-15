@@ -137,6 +137,8 @@ class Handler(BaseHTTPRequestHandler):
             elif action == "ack":
                 s.ack(int(body["id"]) if body.get("id") is not None else None,
                       chat=str(body["chat"]).upper() if body.get("chat") else None, scope=body.get("scope"))
+            elif action == "unack":
+                s.unack(int(body["id"]))
             elif action == "logon":
                 s.logon(str(body.get("station", "")))
             elif action == "logoff":

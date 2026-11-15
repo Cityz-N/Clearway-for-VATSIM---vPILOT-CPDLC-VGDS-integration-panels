@@ -498,6 +498,15 @@ class Session(VpilotMixin):
                     m["acked"] = True
             self._bump()
 
+    def unack(self, msg_id: int) -> None:
+        """Mark one received message as unread again (right click on the panel icon)."""
+        with self.lock:
+            msg = self._find(msg_id)
+            if not msg or msg["dir"] != "in":
+                raise ValueError("Message not found.")
+            msg["acked"] = False
+            self._bump()
+
     def _to_trash(self, removed: list[dict]) -> None:
         self.trash.extend(removed)
         del self.trash[:-MAX_MESSAGES]

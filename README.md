@@ -91,6 +91,7 @@ vPilot doesn't let plugins set the squawk code or tune radios, so `.x`/`.squawk`
 3. In the sim, click the Clearway icon in the toolbar. A small round icon appears:
    - **click** it to open or collapse the message card
    - **drag** it anywhere on screen (the position is remembered)
+   - **right click** it to peek at the latest unread message (vPilot first) and mark it read; with nothing unread, it marks the latest message unread again
    - it **flashes** when a message arrives and **stays amber** until you answer or acknowledge it
 
 The panel is a transparent full-screen layer, and only the icon and card catch the mouse. It's designed for 16:9 screens (1080p, 1440p, 4K).

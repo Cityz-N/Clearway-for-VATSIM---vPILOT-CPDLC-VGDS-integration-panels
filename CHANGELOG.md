@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- MSFS panel: right click the icon to peek at the latest unread message in a small window, which marks it as read (vPilot messages first, then CPDLC). Right click again for the next one
+- MSFS panel: right clicking when everything is read marks the latest received message as unread again
+- MSFS panel: click the peek window to open the card on that message
+- MSFS panel: CPDLC messages that need an answer show their reply buttons (WILCO, UNABLE, STANDBY...) right in the peek window
+- MSFS panel: the peek window stays open while the mouse is over it, and closes 3 seconds after the mouse leaves
+
 ## 0.6.2
 
 - The "Got it" button is replaced by a small tick next to the time: click it to mark a message as read (panel and phone)

@@ -669,6 +669,128 @@
     y = Math.max(4, Math.min(window.innerHeight - ch - 4, y));
     c.style.left = x + "px";
     c.style.top = y + "px";
+    if (peekMsg) placePeek();
+  }
+
+  // ------------------------------------------------------------ right click on the icon: peek
+  // Shows the latest unread message (vPilot first, then CPDLC) and marks it read. With nothing
+  // unread, the latest received message is marked unread again instead.
+  var PEEK_MS = 8000;
+  var peekTimer = null, peekMsg = null, lastPeekAt = 0;
+  function peekable(m) { return m.dir === "in" && m.kind !== "vinfo"; }
+
+  function peek() {
+    var now = Date.now();
+    if (now - lastPeekAt < 350) return;      // mousedown + contextmenu fire for the same click
+    lastPeekAt = now;
+    if (!state || !reachable) return;
+    var msgs = state.messages.filter(peekable), vp = null, cp = null, last = null;
+    for (var i = msgs.length - 1; i >= 0; i--) {
+      var m = msgs[i];
+      if (!last) last = m;
+      if (!m.acked && ackPending[m.id] === undefined) {
+        if (VP[m.kind]) { if (!vp) vp = m; } else if (!cp) cp = m;
+      }
+    }
+    var target = vp || cp;
+    if (target) {
+      ackPending[target.id] = 1;
+      target.acked = true;
+      act("ack", { id: target.id }, null, null, function () { delete ackPending[target.id]; });
+      showPeek(target, false);
+    } else if (last) {
+      last.acked = false;
+      act("unack", { id: last.id }, null);
+      showPeek(last, true);
+    }
+  }
+
+  function showPeek(m, markedUnread) {
+    var isVp = !!VP[m.kind], p = el("cw-peek");
+    var label = isVp ? ({ pm: "Private", radio: "Frequency", broadcast: "Broadcast", selcal: "SELCAL" }[m.kind] || "vPilot")
+      : (m.tag || { cpdlc: "CPDLC", telex: "TELEX" }[m.kind] || "INFO");
+    var text = plain(m.text || "");
+    if (text.length > 320) text = text.slice(0, 317) + "...";
+    var foot = markedUnread ? "<div class=\"cw-peek-foot unread\">Marked as unread</div>" : "";
+    if (!isVp && m.options && m.options.length) {            // answer straight from the peek
+      var btns = "";
+      for (var j = 0; j < m.options.length; j++) {
+        btns += "<div class=\"cw-btn " + m.options[j] + "\" data-peek-reply=\"" + m.options[j] + "\">" + m.options[j] + "</div>";
+      }
+      foot += "<div class=\"cw-actions\">" + btns + "</div><div class=\"cw-peek-foot\" id=\"cw-peek-state\"></div>";
+    }
+    p.className = isVp ? "vp" : "";
+    p.innerHTML = "<div class=\"cw-peek-head\"><span class=\"cw-peek-kind\">" + esc(label) + "</span>" +
+      "<span class=\"cw-station\">" + esc(m.station) + "</span>" +
+      (m.freq ? "<span class=\"cw-freq\">" + esc(m.freq) + "&nbsp;</span>" : "") +
+      "<span class=\"cw-time\">" + utc(m.ts) + "</span></div>" +
+      "<div class=\"cw-peek-text" + (isVp ? "" : " mono") + "\">" + (isVp ? esc(text) : fmt(text)) + "</div>" + foot;
+    peekMsg = m;
+    placePeek();
+    armPeekClose(PEEK_MS);
+  }
+
+  // closes after a while, but never while the mouse is over it (the timer restarts on leaving)
+  var peekHover = false;
+  function armPeekClose(ms) {
+    clearTimeout(peekTimer);
+    peekTimer = setTimeout(function () { if (!peekHover) hidePeek(); }, ms);
+  }
+
+  function hidePeek() {
+    clearTimeout(peekTimer);
+    el("cw-peek").classList.add("hidden");
+    peekMsg = null;
+    peekHover = false;
+  }
+
+  function onPeekClick(e) {
+    var r = pick(e.target, "data-peek-reply");
+    if (!r) return openPeeked();
+    var m = peekMsg;
+    if (!m) return;
+    var btns = el("cw-peek").getElementsByClassName("cw-actions")[0];
+    if (btns) btns.style.display = "none";
+    var stateEl = el("cw-peek-state");
+    if (stateEl) stateEl.textContent = "Sending " + r + "...";
+    act("reply", { id: m.id, text: r }, null, null, function (ok, data) {
+      var s = el("cw-peek-state");
+      if (s) { s.textContent = ok ? r + " sent" : plain(data.error || "Failed"); s.className = "cw-peek-foot" + (ok ? " sent" : " unread"); }
+      if (!ok && btns) btns.style.display = "";
+      armPeekClose(ok ? 2000 : PEEK_MS);
+    });
+  }
+
+  // next to the icon, on the side the card opens (the other side while the card is open)
+  function placePeek() {
+    var b = el("cw-bubble"), p = el("cw-peek");
+    var bx = b.offsetLeft, by = b.offsetTop, bs = b.offsetWidth || 48, gap = 10 * scale;
+    var pw = p.offsetWidth || 300, ph = p.offsetHeight || 100;
+    var d = cardDirection(), right = d.right;
+    if (expanded) {                       // other side if there is room, else briefly over the card
+      var ox = d.right ? bx - pw - gap : bx + bs + gap;
+      if (ox >= 4 && ox + pw <= window.innerWidth - 4) right = !d.right;
+    }
+    var x = right ? bx + bs + gap : bx - pw - gap;
+    var y = d.down ? by : by + bs - ph;
+    p.style.left = Math.max(4, Math.min(window.innerWidth - pw - 4, x)) + "px";
+    p.style.top = Math.max(4, Math.min(window.innerHeight - ph - 4, y)) + "px";
+  }
+
+  // clicking the peek opens the card on that message
+  function openPeeked() {
+    var m = peekMsg;
+    hidePeek();
+    if (!m) return;
+    if (VP[m.kind]) {
+      var c = String(m.chat || "FREQ").toUpperCase();
+      if (c !== "FREQ" && openedChats.indexOf(c) < 0) { openedChats.push(c); save("CLEARWAY_CHATS", openedChats); }
+      if (closedChats[c] !== undefined) { delete closedChats[c]; save("CLEARWAY_CLOSED", closedChats); }
+      activeChat = c; atcOpen = false; lastChatKey = "";
+    }
+    notesOpen = false;
+    showTab(VP[m.kind] ? "vpilot" : "cpdlc");
+    if (!expanded) setExpanded(true);
   }
 
   function toggleLock() {
@@ -812,7 +934,18 @@
     applyScale();
     window.addEventListener("resize", applyScale);
 
-    makeDraggable(el("cw-bubble"), function () { setExpanded(!expanded); });
+    makeDraggable(el("cw-bubble"), function () { hidePeek(); setExpanded(!expanded); });
+    el("cw-bubble").addEventListener("mousedown", function (e) {
+      if (e.button === 2) { e.preventDefault(); e.stopPropagation(); peek(); }
+    });
+    el("cw-bubble").addEventListener("contextmenu", function (e) { e.preventDefault(); peek(); });
+    el("cw-peek").addEventListener("click", onPeekClick);
+    el("cw-peek").addEventListener("mouseover", function () { peekHover = true; clearTimeout(peekTimer); });
+    el("cw-peek").addEventListener("mouseout", function (e) {
+      if (e.relatedTarget && el("cw-peek").contains(e.relatedTarget)) return;   // moving between its children
+      peekHover = false;
+      armPeekClose(3000);
+    });
     makeDraggable(el("cw-head"), null);
     placementLock = load("CLEARWAY_LOCK", null);
     updateLockButton();
