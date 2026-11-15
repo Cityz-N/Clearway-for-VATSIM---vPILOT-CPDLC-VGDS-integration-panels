@@ -441,3 +441,11 @@ body[data-tab="vpilot"] .vp-composer { display: flex; }
 .vp-atc-arrow { color: var(--muted); flex: 0 0 auto; transition: transform .2s; }
 .vp-atc-item.open .vp-atc-arrow { transform: rotate(90deg); color: var(--text); }
 .vp-atc-info { margin: 0 0 10px 26px; padding: 8px 10px; border-radius: 10px; background: var(--mint-soft); color: var(--mint); font: 12.5px/1.45 var(--mono); white-space: pre-wrap; }
+
+/* tick: mark an unread message as read */
+.tick {
+  border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 26px; margin: -4px 0 -4px 8px; border-radius: 8px;
+  background: var(--mint-soft); color: var(--mint);
+}
+.tick:hover, .tick:active { background: var(--mint); color: var(--bg); }

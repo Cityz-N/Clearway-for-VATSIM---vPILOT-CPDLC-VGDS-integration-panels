@@ -132,7 +132,6 @@
         if (m.kind === "cpdlc" && (m.status === "open" || m.status === "standby")) foot += `<button class="reply" data-free="${m.id}">Free text</button>`;
         if (["telex", "pm", "radio"].includes(m.kind)) foot += `<button class="reply" data-free="${m.id}">Reply</button>`;
       }
-      if (unread && !m.options.length) foot += `<button class="reply" data-ack="${m.id}">Got it</button>`;
       let st = "";
       if (m.dir === "in" && m.reply) st = `Answered <b>${esc(m.reply)}</b>`;
       if (m.dir === "in" && m.status === "standby") st = `<b>STANDBY</b> sent, answer when ready`;
@@ -142,7 +141,7 @@
       if (m.dir === "out" && m.status === "sending") st = "Sending through vPilot…";
       if (m.kind === "radio" && m.freq) st = (st ? st + " · " : "") + `on ${esc(m.freq)}`;
       return `<article class="msg ${m.dir} ${unread ? "unread" : ""} ${m.collapsed ? "collapsed" : ""}" id="m${m.id}" data-msg="${m.id}">
-        <div class="msg-head"><span class="chip ${m.kind} tag-${label}">${label}</span><span>${arrow}</span><span class="msg-station">${esc(m.station)}</span><span class="msg-time">${utc(m.ts)}</span><button class="fold" data-fold="${m.id}" aria-label="${m.collapsed ? "Expand" : "Collapse"}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button><button class="del" data-del="${m.id}" aria-label="Delete">×</button></div>
+        <div class="msg-head"><span class="chip ${m.kind} tag-${label}">${label}</span><span>${arrow}</span><span class="msg-station">${esc(m.station)}</span><span class="msg-time">${utc(m.ts)}</span>${unread && !m.options.length ? `<button class="tick" data-ack="${m.id}" aria-label="Mark as read"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : ""}<button class="fold" data-fold="${m.id}" aria-label="${m.collapsed ? "Expand" : "Collapse"}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button><button class="del" data-del="${m.id}" aria-label="Delete">×</button></div>
         <div class="msg-text">${fmt(m.text)}</div>
         ${st || foot ? `<div class="msg-foot">${st ? `<span class="state">${st}</span>` : ""}${foot}</div>` : ""}
       </article>`;

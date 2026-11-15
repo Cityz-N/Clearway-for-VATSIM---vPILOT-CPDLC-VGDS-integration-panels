@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Test tool only: a fake vPilot that loads the Clearway plugin. Not shipped. -->
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <LangVersion>7.3</LangVersion>
+    <VpilotDir Condition="'$(VpilotDir)' == ''">C:\vPilot</VpilotDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="RossCarlson.Vatsim.Vpilot.Plugins">
+      <HintPath>$(VpilotDir)\RossCarlson.Vatsim.Vpilot.Plugins.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

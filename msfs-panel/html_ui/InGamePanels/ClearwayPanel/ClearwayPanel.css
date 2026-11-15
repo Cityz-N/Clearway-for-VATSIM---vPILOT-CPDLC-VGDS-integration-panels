@@ -452,3 +452,13 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 
 /* header items never wrap */
 .cw-kbd, .cw-clock, .cw-tab { white-space: nowrap; flex-shrink: 0; }
+
+/* tick: mark an unread message as read */
+.cw-tick {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 1.9em; height: 1.7em; margin-left: 0.3em; border-radius: 0.45em; cursor: pointer;
+  background-color: var(--mint-soft);
+}
+.cw-tick:hover { background-color: var(--mint); }
+.cw-ti { width: 1.05em; height: 1.05em; stroke: var(--mint); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.cw-tick:hover .cw-ti { stroke: var(--bg); }

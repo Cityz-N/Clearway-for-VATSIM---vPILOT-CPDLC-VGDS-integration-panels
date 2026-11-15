@@ -150,6 +150,7 @@
     return String(s == null ? "" : s).replace(/\u2026/g, "...").replace(/\u2192/g, "to").replace(/\u00d7/g, "x")
       .replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, "\"").replace(/[\u2013\u2014\u00b7]/g, "-");
   }
+  var TICK_ICON = "<svg class=\"cw-ti\" viewBox=\"0 0 12 12\"><path d=\"M2.5 6.4l2.4 2.4 4.6-5\"/></svg>";
   var X_ICON = "<svg class=\"cw-xi\" viewBox=\"0 0 10 10\"><path d=\"M2 2l6 6M8 2l-6 6\"/></svg>";
   function esc(s) {
     return plain(s).replace(/[&<>"']/g, function (c) {
@@ -455,7 +456,6 @@
       for (var j = 0; j < m.options.length; j++) {
         actions += "<div class=\"cw-btn " + m.options[j] + "\" data-reply=\"" + m.options[j] + "\" data-id=\"" + m.id + "\">" + m.options[j] + "</div>";
       }
-      if (unread && !m.options.length) actions += "<div class=\"cw-btn\" data-ack=\"" + m.id + "\">Got it</div>";
       var st = "";
       if (m.dir === "in" && m.reply) st = "Answered " + esc(m.reply);
       if (m.dir === "in" && m.status === "standby") st = "STANDBY sent";
@@ -467,6 +467,7 @@
         "<div class=\"cw-meta\"><span class=\"cw-chip " + m.kind + " tag-" + label + "\">" + label + "</span>" +
         "<span class=\"cw-station\">" + (m.dir === "out" ? "to " : "") + esc(m.station) + "</span>" +
         "<span class=\"cw-time\">" + utc(m.ts) + "</span>" +
+        (unread && !m.options.length ? "<span class=\"cw-tick\" data-ack=\"" + m.id + "\" title=\"Mark as read\">" + TICK_ICON + "</span>" : "") +
         "<span class=\"cw-fold\" data-fold=\"" + m.id + "\" title=\"" + (m.collapsed ? "Expand" : "Collapse") + "\"></span>" +
         "<span class=\"cw-del\" data-del=\"" + m.id + "\" title=\"Delete\">" + X_ICON + "</span></div>" +
         "<div class=\"cw-text\">" + fmt(m.text) + "</div>" +
@@ -948,6 +949,9 @@
     var openParam = /[?&]open=(vpilot|cpdlc)/.exec(window.location.search || "");
     showTab(openParam ? openParam[1] : load("CLEARWAY_TAB", "vpilot"));
     setExpanded(openParam ? true : load("CLEARWAY_EXPANDED", false));
+    // ?atc=CALLSIGN opens Nearby ATC with that controller expanded (documentation screenshots)
+    var atcParam = /[?&]atc=([A-Z0-9_]+)/i.exec(window.location.search || "");
+    if (atcParam) { atcOpen = true; setTimeout(function () { toggleAtc(atcParam[1].toUpperCase()); }, 600); }
 
     render();
     poll(true);

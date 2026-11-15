@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2
+
+- The "Got it" button is replaced by a small tick next to the time: click it to mark a message as read (panel and phone)
+
 ## 0.6.1
 
 - MSFS panel: text fields no longer take the keyboard away from MSFS, so controllers (yoke, joystick, throttle...) always keep working while you type. Keys bound to sim commands also reach the sim while typing
