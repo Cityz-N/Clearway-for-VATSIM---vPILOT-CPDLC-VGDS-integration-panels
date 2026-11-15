@@ -721,7 +721,7 @@
     var startX, startY, originX, originY, moved;
     handle.addEventListener("mousedown", function (e) {
       if (e.button !== 0) return;
-      if (up(e.target, ".cw-icon-btn") || up(e.target, ".cw-tab") || up(e.target, ".cw-clock") || up(e.target, ".cw-kbd")) return;
+      if (up(e.target, ".cw-icon-btn") || up(e.target, ".cw-tab") || up(e.target, ".cw-clock")) return;
       var b = el("cw-bubble");
       startX = e.clientX; startY = e.clientY;
       originX = b.offsetLeft; originY = b.offsetTop;
@@ -747,41 +747,40 @@
     });
   }
 
-  // While a text field has focus the sim sends the keyboard to the panel (so typing doesn't
-  // trigger sim shortcuts). Joysticks, yokes and other controllers are not affected.
-  // The field keeps the keyboard while its cursor blinks, even if the mouse moves away.
-  // It gives it back when the panel loses focus (e.g. a click in the cockpit), on Esc,
-  // when collapsing/switching tabs, or when the field disappears.
-  var keyboardOwner = null;   // id of the field that currently holds the sim's keyboard
+  // Text fields never take the keyboard away from MSFS: taking it (FOCUS_INPUT_FIELD) makes the sim
+  // pause every aircraft input, controllers included. So controllers always work while typing;
+  // the trade-off is that keys bound to sim commands also reach the sim.
+  // To stop later sim key presses from landing in a forgotten text box (or a stray Enter sending
+  // them), a field gives up its cursor after IDLE_BLUR_MS without typing, and on Esc, when
+  // collapsing/switching tabs, or when the panel loses focus.
+  var IDLE_BLUR_MS = 15000;
+  var keyboardOwner = null;   // id of the text field that currently has the cursor
+  var idleTimer = null;
   function releaseKeyboard() {
     var a = document.activeElement;
     if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA") && up(a, "#cw-root")) a.blur();
-    if (keyboardOwner && typeof Coherent !== "undefined") Coherent.trigger("UNFOCUS_INPUT_FIELD", keyboardOwner);
     keyboardOwner = null;
-    showTyping(false);
+    clearTimeout(idleTimer);
   }
 
-  function showTyping(on) {
-    var k = el("cw-kbd");
-    if (k) k.classList.toggle("hidden", !on);
+  function armIdleBlur() {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(releaseKeyboard, IDLE_BLUR_MS);
   }
 
   function wireInput(input, onEnter) {
     input.addEventListener("focus", function () {
       keyboardOwner = input.id;
-      showTyping(true);
-      if (typeof Coherent !== "undefined") Coherent.trigger("FOCUS_INPUT_FIELD", input.id, "", "", "", false);
+      armIdleBlur();
     });
     input.addEventListener("blur", function () {
-      if (keyboardOwner === input.id) {
-        if (typeof Coherent !== "undefined") Coherent.trigger("UNFOCUS_INPUT_FIELD", input.id);
-        keyboardOwner = null;
-        showTyping(false);
-      }
+      if (keyboardOwner === input.id) { keyboardOwner = null; clearTimeout(idleTimer); }
     });
+    input.addEventListener("input", armIdleBlur);
     var lastEnter = 0;
     function onKey(e) {
       if (e.key === "Escape" || e.keyCode === 27) { releaseKeyboard(); e.stopPropagation(); return; }
+      armIdleBlur();
       var isEnter = e.key === "Enter" || e.keyCode === 13 || e.which === 13;
       if (isEnter && !e.shiftKey && onEnter) {
         e.preventDefault();
@@ -832,7 +831,6 @@
     document.addEventListener("visibilitychange", function () { if (document.hidden) releaseKeyboard(); });
     var uiFrame = document.querySelector("ingame-ui");
     if (uiFrame) uiFrame.addEventListener("panelInactive", releaseKeyboard);
-    el("cw-kbd").addEventListener("click", releaseKeyboard);
     el("cw-min").addEventListener("click", function () { setExpanded(false); });
     el("cw-head").addEventListener("click", function (e) {
       var t = up(e.target, ".cw-tab");

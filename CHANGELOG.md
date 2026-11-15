@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+- MSFS panel: text fields no longer take the keyboard away from MSFS, so controllers (yoke, joystick, throttle...) always keep working while you type. Keys bound to sim commands also reach the sim while typing
+- MSFS panel: a text field gives up its cursor after 15 seconds without typing (and on Esc), so later sim key presses can't end up in a forgotten message box
+- MSFS panel: the TYPING badge is removed (keys no longer go only to Clearway)
+
 ## 0.6.0
 
 - MSFS panel: the card opens towards the middle of the screen vertically too (bottom-left icon: card opens up and to the right; bottom-right: up and to the left)

@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PANEL = ROOT / "msfs-panel"
 DIST = ROOT / "dist" / "clearway-panel"
 PACKAGE_NAME = "clearway-panel"
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 
 def find_sdk_tool() -> Path:
