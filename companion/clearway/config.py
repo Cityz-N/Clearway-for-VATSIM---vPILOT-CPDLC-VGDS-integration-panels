@@ -52,6 +52,7 @@ DEFAULTS = {
     "vpilot_callsign": "",            # last details used to connect vPilot (filled automatically)
     "vpilot_type": "",
     "vpilot_selcal": "",
+    "vpilot_observer": False,         # last "connect as observer" choice
     "config_version": 2,
     # Local web server
     "port": 8787,
@@ -108,7 +109,7 @@ class Config:
             "ntfy_enabled": bool, "mute_phone_when_panel_open": bool,
             "adsc_enabled": bool, "open_browser_on_start": bool, "theme": str,
             "vpilot_auto_connect": bool, "vpilot_all_frequency": bool,
-            "vpilot_callsign": str, "vpilot_type": str, "vpilot_selcal": str,
+            "vpilot_callsign": str, "vpilot_type": str, "vpilot_selcal": str, "vpilot_observer": bool,
         }
         for key, kind in editable.items():
             if key in data:

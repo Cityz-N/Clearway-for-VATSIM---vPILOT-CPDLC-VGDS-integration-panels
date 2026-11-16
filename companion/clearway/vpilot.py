@@ -49,6 +49,7 @@ class VpilotMixin:
     def _vp_init(self) -> None:
         self.vpilot_seen = 0.0
         self.vpilot_connected = False
+        self.vpilot_observer = False          # connected as an observer (can listen, not transmit)
         self.vpilot_callsign = ""
         self.vp_controllers: list[dict] = []
         self.vp_info: dict[str, dict] = {}       # controller callsign -> {lines, ts} (their controller info)
@@ -63,23 +64,26 @@ class VpilotMixin:
     def vpilot_active(self) -> bool:
         return time.time() - self.vpilot_seen < VPILOT_TIMEOUT
 
-    def vpilot_poll(self, connected: bool, callsign: str, cid: str) -> list[dict]:
+    def vpilot_poll(self, connected: bool, callsign: str, cid: str, observer: bool = False) -> list[dict]:
         """Heartbeat from the plugin; returns the commands it should run in vPilot.
         When nothing is queued the request waits (up to LONG_POLL seconds), so a command
         typed in Clearway reaches vPilot immediately instead of at the next poll."""
-        items = self._vpilot_take(connected, callsign)
+        items = self._vpilot_take(connected, callsign, observer)
         if not items:
             self._outbox_event.wait(LONG_POLL)
-            items = self._vpilot_take(connected, callsign)
+            items = self._vpilot_take(connected, callsign, observer)
         return items
 
-    def _vpilot_take(self, connected: bool, callsign: str) -> list[dict]:
+    def _vpilot_take(self, connected: bool, callsign: str, observer: bool = False) -> list[dict]:
         was_active = self.vpilot_active()
         with self.lock:
             self.vpilot_seen = time.time()
             callsign = callsign.upper() if connected else ""
-            if not was_active or connected != self.vpilot_connected or callsign != self.vpilot_callsign:
+            observer = observer and connected
+            if (not was_active or connected != self.vpilot_connected or callsign != self.vpilot_callsign
+                    or observer != self.vpilot_observer):
                 self.vpilot_connected = connected
+                self.vpilot_observer = observer
                 self.vpilot_callsign = callsign
                 self._bump()
             now = time.time()
@@ -123,19 +127,23 @@ class VpilotMixin:
             self.vpilot_seen = time.time()
         if kind == "connected":
             with self.lock:
-                self.vpilot_connected = not evt.get("observer")
+                self.vpilot_connected = True
+                self.vpilot_observer = bool(evt.get("observer"))
                 self.vpilot_callsign = str(evt.get("callsign", "")).upper()
                 self.vp_modec = None
                 self._bump()
             # remember the details for the Connect button
-            self.cfg.update({"vpilot_callsign": self.vpilot_callsign,
-                             "vpilot_type": str(evt.get("type_code", "")),
-                             "vpilot_selcal": str(evt.get("selcal", ""))})
-            self._system(f"Connected to VATSIM as {self.vpilot_callsign}.", vp=True)
+            remember = {"vpilot_callsign": self.vpilot_callsign, "vpilot_observer": self.vpilot_observer}
+            if not self.vpilot_observer:          # an observer connection has no aircraft type / SELCAL
+                remember.update({"vpilot_type": str(evt.get("type_code", "")), "vpilot_selcal": str(evt.get("selcal", ""))})
+            self.cfg.update(remember)
+            self._system(f"Connected to VATSIM as {self.vpilot_callsign}"
+                         f"{' (observer)' if self.vpilot_observer else ''}.", vp=True)
             self._maybe_auto_connect()
         elif kind == "disconnected":
             with self.lock:
                 self.vpilot_connected = False
+                self.vpilot_observer = False
                 self.vp_controllers = []
                 self.vp_info = {}
                 self.vp_modec = None
@@ -180,7 +188,7 @@ class VpilotMixin:
 
     def _maybe_auto_connect(self) -> None:
         if (self.cfg.get("vpilot_auto_connect") and self.status in ("offline", "error")
-                and self.cfg.get("hoppie_logon") and self.vpilot_connected):
+                and self.cfg.get("hoppie_logon") and self.vpilot_connected and not self.vpilot_observer):
             self._system("Connecting to Hoppie automatically (vPilot is online).")
             self.connect()
 
@@ -218,16 +226,20 @@ class VpilotMixin:
                     m["reply"] = text
         self._queue(kind, msg_id=msg["id"], to=to, text=text)
 
-    def vpilot_connect(self, callsign: str, type_code: str, selcal: str) -> None:
+    def vpilot_connect(self, callsign: str, type_code: str, selcal: str, observer: bool = False) -> None:
         self._require_vpilot(connected=False)
         if self.vpilot_connected:
             raise ValueError("vPilot is already connected.")
         callsign, type_code, selcal = callsign.strip().upper(), type_code.strip().upper(), selcal.strip().upper()
-        if not callsign or not type_code:
+        if not callsign:
+            raise ValueError("Enter a callsign.")
+        if not observer and not type_code:
             raise ValueError("Enter a callsign and an aircraft type.")
-        self.cfg.update({"vpilot_callsign": callsign, "vpilot_type": type_code, "vpilot_selcal": selcal})
-        self._queue("connect", label="Connect", callsign=callsign, type_code=type_code, selcal=selcal)
-        self._system(f"Connecting vPilot as {callsign}…", vp=True)
+        self.cfg.update({"vpilot_callsign": callsign, "vpilot_observer": bool(observer)})
+        if not observer:
+            self.cfg.update({"vpilot_type": type_code, "vpilot_selcal": selcal})
+        self._queue("connect", label="Connect", callsign=callsign, type_code=type_code, selcal=selcal, observer=bool(observer))
+        self._system(f"Connecting vPilot as {callsign}{' (observer)' if observer else ''}…", vp=True)
 
     def vpilot_disconnect(self) -> None:
         self._require_vpilot()
@@ -387,10 +399,12 @@ class VpilotMixin:
             # without a plugin heartbeat the last known state is stale: report "not connected"
             "connected": self.vpilot_connected and self.vpilot_active(),
             "callsign": self.vpilot_callsign if self.vpilot_active() else "",
+            "observer": self.vpilot_observer and self.vpilot_connected and self.vpilot_active(),
             "modec": self.vp_modec,
             "com": ({k: v for k, v in self.com.items() if k != "ts"}
                     if self.com and time.time() - self.com["ts"] < 15 else None),
             "controllers": ctrls,
             "last": {"callsign": self.cfg.get("vpilot_callsign") or "", "type": self.cfg.get("vpilot_type") or "",
-                     "selcal": self.cfg.get("vpilot_selcal") or ""},
+                     "selcal": self.cfg.get("vpilot_selcal") or "",
+                     "observer": bool(self.cfg.get("vpilot_observer"))},
         }

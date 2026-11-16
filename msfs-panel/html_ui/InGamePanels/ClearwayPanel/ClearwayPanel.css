@@ -488,3 +488,18 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 #cw-peek .cw-actions { margin-top: 0.5em; }
 .cw-peek-foot.sent { color: var(--mint); }
 #cw-peek-state:empty { display: none; }
+
+/* ================= v0.8 ================= */
+/* connect as observer */
+.cw-check { display: flex; align-items: center; margin: 0.1em 0 0.55em; color: var(--muted); cursor: pointer; font-size: 0.95em; }
+.cw-check .cw-box { width: 1.15em; height: 1.15em; border-radius: 0.3em; border: 1px solid var(--line); background-color: var(--surface-2);
+  margin-right: 0.5em; display: flex; align-items: center; justify-content: center; }
+.cw-check svg { width: 0.85em; height: 0.85em; fill: none; stroke: var(--on-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; visibility: hidden; }
+.cw-check.on { color: var(--text); }
+.cw-check.on .cw-box { background-color: var(--vp); border-color: var(--vp); }
+.cw-check.on svg { visibility: visible; }
+.cw-input.dim { opacity: 0.4; }
+/* focus debug readout (test builds only) */
+#cw-debug { position: absolute; left: 50%; top: 1%; width: 34em; margin-left: -17em; padding: 0.6em 0.8em; border-radius: 0.6em;
+  background-color: rgba(0, 0, 0, 0.82); color: #9df5c6; font-family: "Consolas", monospace; font-size: 0.85em; line-height: 1.3em;
+  white-space: pre; pointer-events: none; z-index: 20; }

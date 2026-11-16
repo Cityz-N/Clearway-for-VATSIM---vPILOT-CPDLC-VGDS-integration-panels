@@ -12,6 +12,8 @@
   var COM_MS = 1000;
   var POSITION_MS = 10000;
   var VP = { pm: 1, radio: 1, broadcast: 1, selcal: 1, vinfo: 1, vsys: 1 };
+  // Test builds only: shows which focus / mouse signals the sim sends (see startFocusDebug). Keep false in releases.
+  var FOCUS_DEBUG = /[?&]focusdebug=1/.test(window.location.search || "");
 
   var el = function (id) { return document.getElementById(id); };
   var state = null;
@@ -263,17 +265,27 @@
     return visible;
   }
 
+  // "Connect as observer" tickbox: an observer only needs a callsign
+  var observerTick = null;
+  function setObserverTick(on) {
+    observerTick = on;
+    el("cw-vp-obs").classList.toggle("on", on);
+    el("cw-vp-type-in").classList.toggle("dim", on);
+    el("cw-vp-selcal-in").classList.toggle("dim", on);
+  }
+
   function renderVpilot() {
     var vp = (state && reachable && state.vpilot) || {};
     el("cw-vp-dot").className = "cw-dot " + (!vp.active ? "" : vp.connected ? "online" : "connecting");
-    el("cw-vp-cs").textContent = !reachable ? "Clearway not running" : !vp.active ? "vPilot plugin not found" : vp.connected ? vp.callsign : "vPilot offline";
+    el("cw-vp-cs").textContent = !reachable ? "Clearway not running" : !vp.active ? "vPilot plugin not found" :
+      vp.connected ? vp.callsign + (vp.observer ? " (observer)" : "") : "vPilot offline";
     var conn = el("cw-vp-conn");
     conn.textContent = vp.connected ? "Disconnect" : "Connect";
     conn.classList.toggle("danger", !!vp.connected);
     conn.classList.toggle("disabled", !vp.active);
     el("cw-vp-sby").classList.toggle("on", vp.modec === false);
     el("cw-vp-c").classList.toggle("on", vp.modec === true);
-    ["cw-vp-sby", "cw-vp-c", "cw-vp-id"].forEach(function (id) { el(id).classList.toggle("disabled", !vp.connected); });
+    ["cw-vp-sby", "cw-vp-c", "cw-vp-id"].forEach(function (id) { el(id).classList.toggle("disabled", !vp.connected || !!vp.observer); });
     if (vp.connected) {
       el("cw-vp-connect").classList.add("hidden");
       if (/^Connecting/.test(el("cw-vp-hint").textContent)) hint("", false, "cw-vp-hint");
@@ -282,6 +294,7 @@
     prefillInput("cw-vp-cs-in", last.callsign || (state && state.callsign));
     prefillInput("cw-vp-type-in", last.type || f.aircraft);
     prefillInput("cw-vp-selcal-in", last.selcal);
+    if (observerTick === null && state && state.vpilot) setObserverTick(!!last.observer);   // last choice
 
     var chats = chatList(), found = false, html = "";
     for (var i = 0; i < chats.length; i++) if (chats[i].name === activeChat) found = true;
@@ -875,7 +888,7 @@
   // the trade-off is that keys bound to sim commands also reach the sim.
   // To stop later sim key presses from landing in a forgotten text box (or a stray Enter sending
   // them), a field gives up its cursor after IDLE_BLUR_MS without typing, and on Esc, when
-  // collapsing/switching tabs, or when the panel loses focus.
+  // collapsing/switching tabs, and on any mouse press outside the panel (mousePressOutsideView).
   var IDLE_BLUR_MS = 15000;
   var keyboardOwner = null;   // id of the text field that currently has the cursor
   var idleTimer = null;
@@ -884,6 +897,84 @@
     if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA") && up(a, "#cw-root")) a.blur();
     keyboardOwner = null;
     clearTimeout(idleTimer);
+  }
+
+  // ------------------------------------------------------------ focus debug (test builds)
+  // Answers: when you type in a field and then click in the cockpit, does the sim tell the panel
+  // anything? Shows focus state, every DOM event type the page receives (with counts and the last
+  // target), attribute changes on the panel frame, and engine (Coherent) events.
+  function startFocusDebug() {
+    var box = document.createElement("div");
+    box.id = "cw-debug";
+    el("cw-root").appendChild(box);
+    var t0 = Date.now(), counts = {}, last = {}, log = [], mouse = { x: -1, y: -1, n: 0 }, lastEv = null;
+    function stamp() { return ((Date.now() - t0) / 1000).toFixed(1); }
+    function name(t) {
+      if (!t || !t.tagName) return t === window ? "window" : t === document ? "document" : "?";
+      return t.tagName.toLowerCase() + (t.id ? "#" + t.id : "");
+    }
+    function note(text) { log.unshift(stamp() + "  " + text); if (log.length > 14) log.pop(); }
+    function seen(type, target) {
+      counts[type] = (counts[type] || 0) + 1;
+      last[type] = stamp() + " " + target;
+    }
+    var TYPES = ["mousedown", "mouseup", "click", "contextmenu", "wheel", "mouseover", "mouseout", "mouseleave",
+      "mouseenter", "pointerdown", "pointerup", "pointerleave", "focus", "blur", "focusin", "focusout",
+      "visibilitychange", "keydown", "keyup", "resize"];
+    TYPES.forEach(function (type) {
+      [window, document].forEach(function (target) {
+        target.addEventListener(type, function (e) {
+          if (e === lastEv) return;           // the same event, caught again on document
+          lastEv = e;
+          seen(type, (target === window ? "w:" : "d:") + name(e.target));
+          if (type !== "mouseover" && type !== "mouseout" && type !== "keydown" && type !== "keyup") note(type + " on " + name(e.target));
+        }, true);
+      });
+    });
+    document.addEventListener("mousemove", function (e) { mouse.x = e.clientX; mouse.y = e.clientY; mouse.n++; mouse.t = name(e.target); }, true);
+    // the panel frame may change classes or attributes when it gains or loses focus
+    var frame = document.querySelector("ingame-ui");
+    if (frame && window.MutationObserver) {
+      new MutationObserver(function (list) {
+        list.forEach(function (m) { note("frame " + m.attributeName + " = " + String(frame.getAttribute(m.attributeName)).slice(0, 40)); });
+      }).observe(frame, { attributes: true });
+      new MutationObserver(function () { note("body class = " + document.body.className.slice(0, 40)); })
+        .observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
+    // events dispatched by the sim's own panel scripts
+    try {
+      var orig = EventTarget.prototype.dispatchEvent;
+      EventTarget.prototype.dispatchEvent = function (ev) {
+        if (ev && ev.type && TYPES.indexOf(ev.type) < 0 && ev.type !== "input") note("dispatch " + ev.type + " on " + name(this));
+        return orig.call(this, ev);
+      };
+    } catch (e) { note("no dispatch hook"); }
+    // engine events registered from now on, plus a few guesses
+    if (typeof Coherent !== "undefined" && Coherent.on) {
+      var on = Coherent.on;
+      Coherent.on = function (evName, cb) {
+        return on.call(Coherent, evName, function () { seen("coh:" + evName, ""); return cb.apply(this, arguments); });
+      };
+      ["FOCUS_CHANGED", "OnFocusChanged", "SetFocus", "UNFOCUS_INPUT_FIELD", "FOCUS_INPUT_FIELD", "mousePressOutsideView",
+        "OnMouseClick", "MOUSE_CLICK", "OnInteractionEvent", "ON_VIEW_FOCUS", "OnViewFocus", "OnViewBlur", "PanelFocused",
+        "PanelUnfocused", "SetActive", "OnActivate", "OnDeactivate"].forEach(function (n) {
+        on.call(Coherent, n, function () { seen("coh:" + n, ""); note("coherent " + n); });
+      });
+    }
+    var lastFocus = null;
+    setInterval(function () {
+      var hf = document.hasFocus ? document.hasFocus() : "?";
+      if (hf !== lastFocus) { note("hasFocus = " + hf); lastFocus = hf; }
+      var a = document.activeElement;
+      var lines = ["FOCUS DEBUG   (type in a field, then click in the cockpit)",
+        "hasFocus " + hf + "   active " + name(a) + "   visibility " + document.visibilityState,
+        "mouse " + Math.round(mouse.x) + "," + Math.round(mouse.y) + "  moves " + mouse.n + "  over " + (mouse.t || "-"),
+        "---- event counts (last time, target)"];
+      Object.keys(counts).sort().forEach(function (k) { lines.push(k + " x" + counts[k] + "   " + last[k]); });
+      lines.push("---- log (newest first)");
+      box.textContent = lines.concat(log).join("\n");
+    }, 250);
+    note("debug started");
   }
 
   function armIdleBlur() {
@@ -962,9 +1053,24 @@
     // the panel losing focus (a click in the cockpit, another window) gives the keyboard back;
     // moving the mouse alone does not
     window.addEventListener("blur", releaseKeyboard);
+    if (FOCUS_DEBUG) startFocusDebug();
     document.addEventListener("visibilitychange", function () { if (document.hidden) releaseKeyboard(); });
     var uiFrame = document.querySelector("ingame-ui");
     if (uiFrame) uiFrame.addEventListener("panelInactive", releaseKeyboard);
+    // A click in the cockpit (or anywhere outside the panel) never reaches this page, but the engine
+    // sends "mousePressOutsideView" for it (found with the focus debug build). The click itself still
+    // goes to the sim. Guard: ignore it right after a mouse press on the panel itself.
+    var lastPanelPress = 0;
+    document.addEventListener("mousedown", function () { lastPanelPress = Date.now(); }, true);
+    if (typeof Coherent !== "undefined" && Coherent.on) {
+      try {
+        Coherent.on("mousePressOutsideView", function () {
+          setTimeout(function () {
+            if (Date.now() - lastPanelPress > 250) releaseKeyboard();
+          }, 30);
+        });
+      } catch (e) { /* older sim: keep the idle / Esc behaviour */ }
+    }
     el("cw-min").addEventListener("click", function () { setExpanded(false); });
     el("cw-head").addEventListener("click", function (e) {
       var t = up(e.target, ".cw-tab");
@@ -981,8 +1087,10 @@
       placeCard();
     });
     el("cw-vp-connect-go").addEventListener("click", function () {
-      act("vp/connect", { callsign: el("cw-vp-cs-in").value, type_code: el("cw-vp-type-in").value, selcal: el("cw-vp-selcal-in").value }, "Connecting...", "cw-vp-hint");
+      act("vp/connect", { callsign: el("cw-vp-cs-in").value, type_code: el("cw-vp-type-in").value, selcal: el("cw-vp-selcal-in").value,
+        observer: !!observerTick }, observerTick ? "Connecting as observer..." : "Connecting...", "cw-vp-hint");
     });
+    el("cw-vp-obs").addEventListener("click", function () { setObserverTick(!observerTick); });
     el("cw-vp-sby").addEventListener("click", function () { act("vp/modec", { on: false }, "Standby", "cw-vp-hint"); });
     el("cw-vp-c").addEventListener("click", function () { act("vp/modec", { on: true }, "Mode C", "cw-vp-hint"); });
     el("cw-vp-id").addEventListener("click", function () {

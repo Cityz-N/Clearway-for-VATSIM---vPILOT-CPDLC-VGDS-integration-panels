@@ -1,0 +1,278 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Clearway demo flight</title>
+<!-- Scripted demo flight used by tools/record_demo.py to record the panel animation.
+     The real panel runs in the iframe against the test Clearway (tools/dev_run.py, port 8797);
+     this page only draws the cockpit view, moves a fake cursor and plays the script. -->
+<style>
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #000; font-family: "Segoe UI Variable", "Segoe UI", sans-serif; }
+  .scene { position: absolute; inset: 0; opacity: 0; transition: opacity 1.2s ease; }
+  .scene.on { opacity: 1; }
+
+  /* ---------- gate at dusk ---------- */
+  #gate { background: linear-gradient(180deg, #0f1c36 0%, #2a3f68 30%, #8a6a7a 40%, #e09a62 44%, #3a3236 44.4%, #26262a 60%, #1c1c1f 100%); }
+  #gate .terminal { position: absolute; left: 0; width: 1920px; top: 352px; height: 128px; background: #15171c; }
+  #gate .terminal::before { content: ""; position: absolute; left: 40px; right: 40px; top: 30px; height: 40px;
+    background: repeating-linear-gradient(90deg, rgba(255, 214, 150, .75) 0 26px, transparent 26px 38px); opacity: .55; }
+  #gate .terminal::after { content: ""; position: absolute; left: 0; right: 0; top: -14px; height: 14px; background: #1b1e24; }
+  #gate .bridge { position: absolute; left: 610px; top: 420px; width: 360px; height: 34px; background: #2a2d34; transform: skewY(9deg); transform-origin: 0 0; box-shadow: inset 0 -6px 0 #1c1e23; }
+  #gate .line { position: absolute; left: 300px; top: 480px; width: 900px; height: 600px; border-left: 5px solid #d9b13b; border-radius: 40% 0 0 0; opacity: .7; transform: perspective(500px) rotateX(55deg); transform-origin: 50% 0; }
+
+  /* ---------- runway 27R ---------- */
+  #rwy { background: linear-gradient(180deg, #13223f 0%, #33507e 28%, #b78a7a 40%, #f0a868 43.4%, #2a2c25 43.6%, #1e211b 62%, #15170f 100%); }
+  #rwy .runway { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: #3a3b3e;
+    clip-path: polygon(505px 470px, 545px 470px, 1060px 1080px, -30px 1080px); }
+  #rwy .centre { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px;
+    background: repeating-linear-gradient(180deg, #f2f2f2 0 22px, transparent 22px 52px);
+    clip-path: polygon(523px 474px, 527px 474px, 535px 1080px, 505px 1080px); opacity: .85; }
+  #rwy .light { position: absolute; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #fff3c4; box-shadow: 0 0 8px 3px rgba(255, 228, 160, .7); }
+
+  /* ---------- oceanic cruise ---------- */
+  #cruise { background: linear-gradient(180deg, #08173a 0%, #1a3f7c 30%, #5d8fc8 45%, #a9c8e6 49%, #dfe9f3 50%, #c6d3e2 60%, #9fb1c6 100%); }
+  #cruise .sun { position: absolute; left: 820px; top: 230px; width: 360px; height: 360px; margin: -180px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 252, 235, 1) 0 6%, rgba(255, 240, 200, .5) 14%, transparent 60%); }
+  #cruise .cloud { position: absolute; border-radius: 50%; background: radial-gradient(ellipse, rgba(255, 255, 255, .95), rgba(232, 238, 246, .4) 55%, transparent 70%); }
+
+  /* ---------- cockpit frame ---------- */
+  .glare { position: absolute; left: -100px; right: -100px; top: 676px; height: 500px; background: #0b0c0f; border-radius: 50% 50% 0 0 / 60px 60px 0 0; box-shadow: 0 -2px 0 #23262d; }
+  .pillar { position: absolute; left: 968px; top: 100px; width: 90px; height: 700px; background: linear-gradient(90deg, #121318, #07080a); transform: skewX(-9deg); }
+  .brand { position: absolute; left: 650px; top: 166px; width: 300px; text-align: right; color: #fff; font-size: 17px; font-weight: 600; letter-spacing: .3px; text-shadow: 0 1px 6px rgba(0,0,0,.6); opacity: .9; }
+  .brand span { color: #00d8d4; }
+  #caption { position: absolute; left: 466px; top: 680px; white-space: nowrap; padding: 7px 15px; border-radius: 18px;
+    background: rgba(8, 12, 20, .78); color: #fff; font-size: 15.5px; border: 1px solid rgba(255,255,255,.12); transition: opacity .35s; }
+  #caption b { color: #00d8d4; font-weight: 600; }
+
+  #panel { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; background: transparent; }
+
+  /* ---------- fake cursor ---------- */
+  #cursor { position: absolute; left: 0; top: 0; width: 22px; height: 30px; z-index: 10; pointer-events: none; }
+  .ripple { position: absolute; width: 36px; height: 36px; margin: -18px; border-radius: 50%; border: 3px solid #fff; z-index: 9; pointer-events: none; animation: rip .55s ease-out forwards; }
+  .ripple.right { border-color: #f5b14c; }
+  @keyframes rip { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+  .rlabel { position: absolute; z-index: 9; color: #f5b14c; font: 600 13px "Segoe UI", sans-serif; text-shadow: 0 1px 4px #000; pointer-events: none; }
+</style>
+</head>
+<body>
+  <div class="scene on" id="gate"><div class="terminal"></div><div class="bridge"></div><div class="line"></div></div>
+  <div class="scene" id="rwy"><div class="runway"></div><div class="centre"></div></div>
+  <div class="scene" id="cruise"><div class="sun"></div></div>
+  <div class="pillar"></div>
+  <div class="glare"></div>
+  <div class="brand">Clearway <span>for VATSIM</span></div>
+  <iframe id="panel"></iframe>
+  <div id="caption" style="opacity:0"></div>
+  <svg id="cursor" viewBox="0 0 22 30"><path d="M2 2v22l6-5.5 4 9 3.6-1.6-4-8.8H19z" fill="#fff" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/></svg>
+
+<script>
+"use strict";
+var API = "http://localhost:8797/api/";
+
+// ---- scenery ----
+(function () {
+  var rwy = document.getElementById("rwy");
+  for (var i = 0; i < 26; i++) {                       // edge lights, closer together in the distance
+    var t = Math.pow(i / 25, 1.8), y = 472 + t * 620;
+    [[505, -30], [545, 1060]].forEach(function (e) {
+      var d = document.createElement("div");
+      d.className = "light";
+      d.style.left = (e[0] + (e[1] - e[0]) * t) + "px";
+      d.style.top = y + "px";
+      d.style.transform = "scale(" + (0.4 + t * 1.6) + ")";
+      rwy.appendChild(d);
+    });
+  }
+  var cr = document.getElementById("cruise");
+  [[80, 560, 520, 120], [420, 600, 700, 160], [-60, 650, 600, 200], [700, 545, 520, 90], [300, 520, 420, 70], [600, 700, 800, 260]].forEach(function (c) {
+    var d = document.createElement("div");
+    d.className = "cloud";
+    d.style.left = c[0] + "px"; d.style.top = c[1] + "px"; d.style.width = c[2] + "px"; d.style.height = c[3] + "px";
+    cr.appendChild(d);
+  });
+})();
+
+function scene(id) {
+  ["gate", "rwy", "cruise"].forEach(function (s) { document.getElementById(s).classList.toggle("on", s === id); });
+}
+function caption(html) {
+  var c = document.getElementById("caption");
+  c.style.opacity = 0;
+  return wait(350).then(function () { c.innerHTML = html; c.style.opacity = html ? 1 : 0; });
+}
+
+// ---- helpers ----
+function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function api(path, body) {
+  return fetch(API + path, body === undefined ? {} : { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); });
+}
+var doc = null;
+function $(sel) { return doc.querySelector(sel); }
+function waitFor(sel, ms) {
+  var end = Date.now() + (ms || 6000);
+  return new Promise(function (res, rej) {
+    (function check() {
+      var e = typeof sel === "function" ? sel() : $(sel);
+      if (e && (e.offsetWidth || e.offsetHeight)) return res(e);
+      if (Date.now() > end) return rej(new Error("not found: " + sel));
+      setTimeout(check, 60);
+    })();
+  });
+}
+
+var cur = { x: 760, y: 560 };
+function placeCursor() { var c = document.getElementById("cursor"); c.style.left = (cur.x - 2) + "px"; c.style.top = (cur.y - 2) + "px"; }
+function centre(e, dx, dy) { var r = e.getBoundingClientRect(); return { x: r.left + r.width / 2 + (dx || 0), y: r.top + r.height / 2 + (dy || 0) }; }
+function moveTo(target, ms) {
+  var to = target.nodeType ? centre(target) : target, from = { x: cur.x, y: cur.y }, t0 = performance.now();
+  ms = ms || 650;
+  return new Promise(function (res) {
+    (function step(now) {
+      var k = Math.min(1, (now - t0) / ms), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      cur.x = from.x + (to.x - from.x) * e; cur.y = from.y + (to.y - from.y) * e;
+      placeCursor();
+      if (k < 1) requestAnimationFrame(step); else res();
+    })(t0);
+  });
+}
+function ripple(right) {
+  var r = document.createElement("div");
+  r.className = "ripple" + (right ? " right" : "");
+  r.style.left = cur.x + "px"; r.style.top = cur.y + "px";
+  document.body.appendChild(r);
+  setTimeout(function () { r.remove(); }, 700);
+  if (right) {
+    var l = document.createElement("div");
+    l.className = "rlabel"; l.textContent = "right click";
+    l.style.left = (cur.x + 18) + "px"; l.style.top = (cur.y + 16) + "px";
+    document.body.appendChild(l);
+    setTimeout(function () { l.remove(); }, 1300);
+  }
+}
+function mouse(e, type, button) {
+  var p = centre(e);
+  e.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: button || 0, clientX: p.x, clientY: p.y, view: doc.defaultView }));
+}
+function click(e) { ripple(false); mouse(e, "mousedown"); mouse(e, "mouseup"); mouse(e, "click"); return wait(120); }
+function clickBubble(e) { ripple(false); mouse(e, "mousedown"); doc.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })); return wait(120); }
+function rightClick(e) { ripple(true); mouse(e, "mousedown", 2); mouse(e, "contextmenu", 2); return wait(120); }
+function go(sel, ms) { return waitFor(sel).then(function (e) { return moveTo(e, ms).then(function () { return e; }); }); }
+function goClick(sel, ms) { return go(sel, ms).then(click); }
+function type(e, text, cps) {
+  e.focus();
+  var i = 0;
+  return new Promise(function (res) {
+    (function next() {
+      if (i >= text.length) return res();
+      e.value += text[i++];
+      e.dispatchEvent(new Event("input", { bubbles: true }));
+      setTimeout(next, 1000 / (cps || 16) * (0.6 + Math.random() * 0.8));
+    })();
+  });
+}
+function fill(id, text) { return goClick("#" + id, 380).then(function () { var e = $("#" + id); e.value = ""; return type(e, text, 18); }); }
+function radio(text) { return api("vpilot/event", { type: "radio", from: "EGLL_TWR", message: text, frequencies: "118.500" }); }
+
+// ---- the flight ----
+function flight() {
+  return Promise.resolve()
+    // at the gate: datalink clearance
+    .then(function () { return wait(900); })
+    .then(function () { return caption("At the gate in <b>Heathrow</b>: request the departure clearance by CPDLC"); })
+    .then(function () { return go("#cw-bubble", 900); })
+    .then(function (b) { return clickBubble(b); })
+    .then(function () { return goClick("#cw-req-toggle"); })
+    .then(function () { return goClick('#cw-req-kind2 [data-v="pdc"]'); })
+    .then(function () { return fill("cw-f-station", "EGLL"); })
+    .then(function () { return fill("cw-f-type", "B77W"); })
+    .then(function () { return fill("cw-f-dep", "EGLL"); })
+    .then(function () { return fill("cw-f-arr", "KJFK"); })
+    .then(function () { return fill("cw-f-stand", "512"); })
+    .then(function () { return fill("cw-f-atis", "C"); })
+    .then(function () { return goClick("#cw-send", 500); })
+    .then(function () { return goClick("#cw-req-toggle", 500); })
+    .then(function () { return caption("The clearance arrives: tick it once read"); })
+    .then(function () { return go("#cw-list .cw-tick", 800); })
+    .then(function () { return wait(1600); })
+    .then(function () { return click($("#cw-list .cw-tick")); })
+    .then(function () { return wait(900); })
+    .then(function () { return goClick("#cw-min", 700); })
+
+    // holding point: vPilot
+    .then(function () { scene("rwy"); return caption("Holding point <b>27R</b>: the tower calls you on the frequency"); })
+    .then(function () { return moveTo({ x: 640, y: 560 }, 800); })
+    .then(function () { return wait(700); })
+    .then(function () { return radio("BAW117 behind the landing A320, line up and wait runway 27R behind"); })
+    .then(function () { return wait(2600); })
+    .then(function () { return caption("<b>Right click</b> the icon to peek at the message"); })
+    .then(function () { return go("#cw-bubble", 800); })
+    .then(function (b) { return rightClick(b); })
+    .then(function () { return wait(2600); })
+    .then(function () { return caption("Click it to open the chat and answer"); })
+    .then(function () { return go("#cw-peek", 500); })
+    .then(function (p) { mouse(p, "mouseover"); return wait(700).then(function () { return click(p); }); })
+    .then(function () { return goClick("#cw-vp-input", 700); })
+    .then(function () { return type($("#cw-vp-input"), "Behind the A320, line up and wait 27R behind, BAW117", 17); })
+    .then(function () { return goClick("#cw-vp-send", 500); })
+    .then(function () { return wait(2200); })
+    .then(function () { return radio("BAW117 wind 250 degrees 9 knots, runway 27R cleared for take-off"); })
+    .then(function () { return wait(1500); })
+    .then(function () { return goClick("#cw-vp-input", 500); })
+    .then(function () { return type($("#cw-vp-input"), "Cleared for take-off 27R, BAW117", 17); })
+    .then(function () { return goClick("#cw-vp-send", 500); })
+    .then(function () { return wait(1500); })
+    .then(function () { return caption("Nearby controllers, ATIS and dot commands are built in"); })
+    .then(function () { return goClick("[data-atc-toggle]", 800); })
+    .then(function () { return wait(600); })
+    .then(function () { return goClick('[data-atc="EGLL_TWR"]', 700); })
+    .then(function () { return wait(3000); })
+    .then(function () { return goClick("#cw-min", 800); })
+
+    // oceanic: CPDLC from Shanwick, answered from the peek
+    .then(function () { scene("cruise"); return caption("Over the Atlantic, logged on to <b>Shanwick</b> (EGGX)"); })
+    .then(function () { return moveTo({ x: 700, y: 520 }, 900); })
+    .then(function () { return wait(1200); })
+    .then(function () {
+      return api("logon", { station: "EGGX" }).then(function () { return wait(400); }).then(function () { return api("state?since=0"); })
+        .then(function (s) {
+          var acc = s.messages.filter(function (m) { return m.dir === "in" && /LOGON ACCEPTED/.test(m.text); });
+          return Promise.all(acc.map(function (m) { return api("ack", { id: m.id }); }));
+        });
+    })
+    .then(function () { return caption("A CPDLC clearance: the icon turns <b style=\"color:#f5b14c\">amber</b>"); })
+    .then(function () { return wait(2600); })
+    .then(function () { return caption("Answer it straight from the peek window"); })
+    .then(function () { return go("#cw-bubble", 800); })
+    .then(function (b) { return rightClick(b); })
+    .then(function () { return wait(1800); })
+    .then(function () { return go('#cw-peek [data-peek-reply="WILCO"]', 700); })
+    .then(function (w) { mouse($("#cw-peek"), "mouseover"); return wait(500).then(function () { return click(w); }); })
+    .then(function () { return wait(2200); })
+    .then(function () { return moveTo({ x: 700, y: 560 }, 700); })
+    .then(function () { mouse($("#cw-peek"), "mouseout"); return wait(3600); })
+    .then(function () { return caption("<b>Clearway for VATSIM</b>: free on flightsim.to and GitHub"); })
+    .then(function () { return wait(3500); });
+}
+
+function start() {
+  placeCursor();
+  var f = document.getElementById("panel");
+  f.onload = function () {
+    doc = f.contentDocument;
+    waitFor("#cw-bubble").then(function () { return wait(2500); }).then(function () { window.__ready = true; return new Promise(function (r) { window.__go = r; }); })
+      .then(flight)
+      .then(function () { window.__done = true; }, function (e) { window.__error = String(e); window.__done = true; });
+  };
+  f.src = "/html_ui/InGamePanels/ClearwayPanel/ClearwayPanel.html?api=http://localhost:8797";
+}
+try {
+  localStorage.setItem("CLEARWAY_POS", JSON.stringify({ x: 0.03, y: 0.25 }));
+  localStorage.setItem("CLEARWAY_EXPANDED", "false");
+  localStorage.setItem("CLEARWAY_TAB", JSON.stringify("cpdlc"));
+  localStorage.setItem("CLEARWAY_LOCK", "null");
+  localStorage.removeItem("CLEARWAY_CHATS");
+} catch (e) { /* ignore */ }
+start();
+</script>
+</body>
+</html>

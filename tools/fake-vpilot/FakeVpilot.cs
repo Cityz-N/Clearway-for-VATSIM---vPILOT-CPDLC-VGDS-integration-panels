@@ -40,7 +40,11 @@ class FakeBroker : IBroker
         Log("CONNECT " + callsign + " " + type + " " + selcal);
         new Thread(() => { Thread.Sleep(500); Connect(callsign, type, selcal); }).Start();
     }
-    public void RequestConnectAsObserver(string c) { }
+    public void RequestConnectAsObserver(string c)
+    {
+        Log("CONNECT OBSERVER " + c);
+        new Thread(() => { Thread.Sleep(500); NetworkConnected?.Invoke(this, new NetworkConnectedEventArgs("1234567", c, "", "", true)); }).Start();
+    }
     public void RequestDisconnect() { Log("DISCONNECT"); NetworkDisconnected?.Invoke(this, EventArgs.Empty); }
     public void RequestMetar(string s) { Log("METAR " + s); MetarReceived?.Invoke(this, new MetarReceivedEventArgs(s + " 151450Z 24012KT 9999 FEW030 12/06 Q1018")); }
     public void RequestAtis(string c)

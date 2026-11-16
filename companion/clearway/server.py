@@ -107,7 +107,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self._is_local():
                 return self._json({"error": "only available on this PC"}, 403)
             q = lambda k: (query.get(k) or [""])[0]  # noqa: E731
-            items = self.session.vpilot_poll(q("connected") == "1", q("callsign"), q("cid"))
+            items = self.session.vpilot_poll(q("connected") == "1", q("callsign"), q("cid"), q("observer") == "1")
             return self._json({"ok": True, "items": items})
         if url.path.startswith("/api/"):
             return self._json({"error": "not found"}, 404)
@@ -161,7 +161,8 @@ class Handler(BaseHTTPRequestHandler):
                 hints = s.vpilot_command(str(body.get("text", "")), str(body.get("chat", "FREQ")))
                 return self._json({"ok": True, "version": s.version, **hints})
             elif action == "vp/connect":
-                s.vpilot_connect(str(body.get("callsign", "")), str(body.get("type_code", "")), str(body.get("selcal", "")))
+                s.vpilot_connect(str(body.get("callsign", "")), str(body.get("type_code", "")), str(body.get("selcal", "")),
+                                 bool(body.get("observer")))
             elif action == "vp/disconnect":
                 s.vpilot_disconnect()
             elif action == "vp/modec":

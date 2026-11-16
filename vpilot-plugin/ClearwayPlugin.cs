@@ -33,6 +33,7 @@ namespace Clearway.Vpilot
             new BlockingCollection<Dictionary<string, object>>(new ConcurrentQueue<Dictionary<string, object>>(), 500);
 
         private volatile bool _connected;
+        private volatile bool _observer;     // connected as an observer
         private volatile string _callsign = "";
         private volatile string _cid = "";
         private volatile bool _companionReachable = true;
@@ -52,7 +53,8 @@ namespace Clearway.Vpilot
 
             broker.NetworkConnected += (s, e) =>
             {
-                _connected = !e.ObserverMode;
+                _connected = true;
+                _observer = e.ObserverMode;
                 _callsign = e.Callsign ?? "";
                 _cid = e.Cid ?? "";
                 Enqueue("connected", "callsign", e.Callsign, "cid", e.Cid, "type_code", e.TypeCode,
@@ -61,6 +63,7 @@ namespace Clearway.Vpilot
             broker.NetworkDisconnected += (s, e) =>
             {
                 _connected = false;
+                _observer = false;
                 _controllers.Clear();
                 _controllersDirty = true;
                 Enqueue("disconnected");
@@ -218,7 +221,8 @@ namespace Clearway.Vpilot
                 try
                 {
                     var url = _api + "outbox?connected=" + (_connected ? "1" : "0") +
-                              "&callsign=" + Uri.EscapeDataString(_callsign) + "&cid=" + Uri.EscapeDataString(_cid);
+                              "&callsign=" + Uri.EscapeDataString(_callsign) + "&cid=" + Uri.EscapeDataString(_cid) +
+                              "&observer=" + (_observer ? "1" : "0");
                     text = Http("GET", url, null, 10000);
                     SetReachable(true);
                 }
@@ -270,7 +274,9 @@ namespace Clearway.Vpilot
                 case "connect":
                 {
                     var cs = Str(item, "callsign"); var type = Str(item, "type_code"); var selcal = Str(item, "selcal");
-                    OnUi(() => _broker.RequestConnect(cs, type, selcal));
+                    var obs = Str(item, "observer").ToLowerInvariant();
+                    if (obs == "true" || obs == "1") OnUi(() => _broker.RequestConnectAsObserver(cs));
+                    else OnUi(() => _broker.RequestConnect(cs, type, selcal));
                     break;
                 }
                 case "disconnect": OnUi(() => _broker.RequestDisconnect()); break;

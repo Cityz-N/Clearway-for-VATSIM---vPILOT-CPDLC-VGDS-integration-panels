@@ -449,3 +449,8 @@ body[data-tab="vpilot"] .vp-composer { display: flex; }
   background: var(--mint-soft); color: var(--mint);
 }
 .tick:hover, .tick:active { background: var(--mint); color: var(--bg); }
+
+/* connect as observer */
+.vp-obs { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; font-size: 14px; color: var(--muted); }
+.vp-obs input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+input.dim { opacity: .4; }

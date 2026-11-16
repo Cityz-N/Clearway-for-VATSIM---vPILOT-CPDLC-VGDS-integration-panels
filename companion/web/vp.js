@@ -14,6 +14,7 @@
   let opened = store.get("vpOpen", []);      // chats opened with .chat / the ATC list
   let closed = store.get("vpClosed", {});    // chat -> last message id when it was closed
   let atcOpen = false;
+  let obsTouched = false;                     // the observer tickbox follows the last choice until changed
   const atcOpenRows = {};   // controllers whose information is expanded
   let lastTab = "";
   let lastChatKey = "";
@@ -64,7 +65,8 @@
     dot.className = "dot " + (!vp.active ? "" : vp.connected ? "online" : "connecting");
     $("vpWho").textContent = !vp.active ? "vPilot plugin not detected" : vp.connected ? vp.callsign : "vPilot offline";
     $("vpWhoSub").textContent = !vp.active ? "Install the Clearway plugin and restart vPilot (see Settings)."
-      : vp.connected ? "Connected to VATSIM" : "Not connected to VATSIM";
+      : vp.connected ? (vp.observer ? "Connected to VATSIM as an observer" : "Connected to VATSIM") : "Not connected to VATSIM";
+    if (!obsTouched && vp.last) { $("vpObserver").checked = !!vp.last.observer; dimObserver(); }
     const btn = $("vpConnectBtn");
     btn.disabled = !vp.active;
     btn.textContent = vp.connected ? "Disconnect" : "Connect";
@@ -76,9 +78,9 @@
     fill("vpCs", last.callsign || s.callsign); fill("vpType", last.type || f.aircraft); fill("vpSelcal", last.selcal);
     document.querySelectorAll("#vpXpdr button").forEach((b) => {
       b.classList.toggle("on", vp.modec === true ? b.dataset.v === "c" : vp.modec === false ? b.dataset.v === "sby" : false);
-      b.disabled = !vp.connected;
+      b.disabled = !vp.connected || !!vp.observer;
     });
-    $("vpIdent").disabled = !vp.connected;
+    $("vpIdent").disabled = !vp.connected || !!vp.observer;
     const c = vp.com;
     const radio = (n, r) => `COM${n} <b>${esc(r.active || "---.---")}</b>${r.tx ? " <span class=\"vp-tx\">TX</span>" : ""}`;
     $("vpCom").innerHTML = c ? radio(1, c.com1) + " &middot; " + radio(2, c.com2) : "";
@@ -224,7 +226,11 @@
     if (vp.connected) { if (confirm("Disconnect vPilot from VATSIM?")) CW.act("vp/disconnect", {}); return; }
     $("vpConnectForm").classList.toggle("hidden-block");
   };
-  $("vpConnectGo").onclick = () => CW.act("vp/connect", { callsign: $("vpCs").value, type_code: $("vpType").value, selcal: $("vpSelcal").value }, "Connecting…");
+  $("vpConnectGo").onclick = () => CW.act("vp/connect", { callsign: $("vpCs").value, type_code: $("vpType").value, selcal: $("vpSelcal").value,
+    observer: $("vpObserver").checked }, $("vpObserver").checked ? "Connecting as observer…" : "Connecting…");
+  // an observer only needs a callsign
+  $("vpObserver").onchange = () => { obsTouched = true; dimObserver(); };
+  function dimObserver() { ["vpType", "vpSelcal"].forEach((id) => $(id).classList.toggle("dim", $("vpObserver").checked)); }
   $("vpXpdr").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     CW.act("vp/modec", { on: b.dataset.v === "c" }, b.dataset.v === "c" ? "Mode C" : "Standby");

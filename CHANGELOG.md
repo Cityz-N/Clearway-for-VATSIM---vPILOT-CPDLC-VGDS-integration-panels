@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+
+- vPilot: "Connect as observer" tickbox in the connect form (panel and phone). An observer only needs a callsign; Clearway shows "(observer)" and greys out the transponder buttons
+- vPilot: an observer connection now counts as connected (it used to show "vPilot offline"), and doesn't start the automatic Hoppie connection
+- MSFS panel: clicking anywhere outside the panel (cockpit, scenery, another window) now takes the cursor out of the notepad and message boxes straight away. The click still reaches the sim as normal
+- vPilot plugin 0.5.0 (needed for observer mode: copy the new Clearway.vPilot.dll into vPilot's Plugins folder)
+
 ## 0.7.0
 
 - MSFS panel: right click the icon to peek at the latest unread message in a small window, which marks it as read (vPilot messages first, then CPDLC). Right click again for the next one
