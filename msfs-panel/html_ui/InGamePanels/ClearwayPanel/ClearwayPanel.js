@@ -682,7 +682,25 @@
     y = Math.max(4, Math.min(window.innerHeight - ch - 4, y));
     c.style.left = x + "px";
     c.style.top = y + "px";
+    placedKey = layoutKey();
     if (peekMsg) placePeek();
+  }
+
+  // The card's content (messages, chat, request form) often arrives or changes size after the card
+  // was placed, and the panel window can change size after the toolbar panel reopens. A card that
+  // opens upwards from a bottom icon then grew past the screen edge until the icon was moved.
+  // So while the card (or the peek) is open, re-place it whenever any of these sizes change.
+  var placedKey = "";
+  function layoutKey() {
+    var b = el("cw-bubble"), c = el("cw-card"), p = el("cw-peek");
+    return [window.innerWidth, window.innerHeight, b.offsetLeft, b.offsetTop, b.offsetWidth,
+      c.offsetWidth, c.offsetHeight, p.offsetWidth, p.offsetHeight].join(",");
+  }
+  function watchLayout() {
+    if (!expanded && !peekMsg) return;
+    if (layoutKey() === placedKey) return;
+    if (window.innerHeight && Math.abs((window.innerHeight / 1080) - scale) > 0.001) applyScale();
+    else placeCard();
   }
 
   // ------------------------------------------------------------ right click on the icon: peek
@@ -884,8 +902,8 @@
   }
 
   // Text fields never take the keyboard away from MSFS: taking it (FOCUS_INPUT_FIELD) makes the sim
-  // pause every aircraft input, controllers included. So controllers always work while typing;
-  // the trade-off is that keys bound to sim commands also reach the sim.
+  // pause every aircraft input, controllers included. Instead Clearway holds the keyboard while a
+  // field has the cursor (see "keyboard capture" below), so typed keys don't reach sim bindings.
   // To stop later sim key presses from landing in a forgotten text box (or a stray Enter sending
   // them), a field gives up its cursor after IDLE_BLUR_MS without typing, and on Esc, when
   // collapsing/switching tabs, and on any mouse press outside the panel (mousePressOutsideView).
@@ -982,13 +1000,129 @@
     idleTimer = setTimeout(releaseKeyboard, IDLE_BLUR_MS);
   }
 
+  // ------------------------------------------------------------ keyboard capture
+  // MSFS runs its own key bindings before the panel sees a key, and ChasePlane reads the keyboard
+  // by itself, so typed letters also fired sim commands / camera shortcuts. While a field has the
+  // cursor, the panel asks Clearway (on this PC) to hold the keyboard: Clearway keeps the keys away
+  // from every program and sends them here, and the panel types them into the field itself.
+  // Without a Clearway that supports it, the sim delivers keys to the field as before.
+  var inputEnter = {};          // field id -> its Enter action
+  var keysWanted = false, keysOn = false, keysLoop = false, keysSeq = 0, keysOffTimer = null;
+  var selAnchor = null;         // fixed end of a Shift+arrow selection
+
+  function wantKeys(on) {
+    keysWanted = on;
+    request("POST", "/api/keys/capture", { on: on }, function (ok, data) {
+      if (keysWanted !== on) return;            // superseded by a newer request
+      keysOn = ok && !!data.active;
+      if (keysOn) { keysSeq = data.seq || 0; keysPoll(); }
+    });
+  }
+
+  function keysPoll() {
+    if (keysLoop) return;
+    keysLoop = true;
+    (function next() {
+      if (!keysOn) { keysLoop = false; return; }
+      request("GET", "/api/keys?since=" + keysSeq, null, function (ok, data) {
+        if (!ok) { keysOn = false; keysLoop = false; return; }
+        var evs = data.events || [];
+        keysSeq = data.seq || 0;
+        for (var i = 0; i < evs.length; i++) applyKey(evs[i]);
+        if (!keyboardOwner) { keysLoop = false; if (keysOn) { keysOn = false; wantKeys(false); } return; }
+        if (!data.active) {                     // Clearway let go (it lost track of the panel): ask again
+          keysOn = false; keysLoop = false;
+          if (keysWanted) wantKeys(true);
+          return;
+        }
+        next();
+      });
+    })();
+  }
+
+  function fireInput(input) {
+    var ev;
+    try { ev = new Event("input", { bubbles: true }); }
+    catch (e) { ev = document.createEvent("Event"); ev.initEvent("input", true, false); }
+    input.dispatchEvent(ev);
+  }
+  function edit(input, from, to, text) {
+    var v = input.value;
+    input.value = v.slice(0, from) + text + v.slice(to);
+    var c = from + text.length;
+    input.setSelectionRange(c, c);
+    selAnchor = null;
+    fireInput(input);
+  }
+  function lineStart(v, p) { return v.lastIndexOf("\n", p - 1) + 1; }
+  function lineEnd(v, p) { var n = v.indexOf("\n", p); return n < 0 ? v.length : n; }
+  function wordLeft(v, p) {
+    while (p > 0 && /\s/.test(v.charAt(p - 1))) p--;
+    while (p > 0 && !/\s/.test(v.charAt(p - 1))) p--;
+    return p;
+  }
+  function wordRight(v, p) {
+    while (p < v.length && !/\s/.test(v.charAt(p))) p++;
+    while (p < v.length && /\s/.test(v.charAt(p))) p++;
+    return p;
+  }
+
+  function applyKey(ev) {
+    if (ev.t === "key" && ev.k === "Escape") { releaseKeyboard(); return; }
+    var input = keyboardOwner ? el(keyboardOwner) : null;
+    if (!input || document.activeElement !== input) return;
+    armIdleBlur();
+    var v = input.value, s = input.selectionStart, e = input.selectionEnd;
+    var multi = input.tagName === "TEXTAREA";
+    if (ev.t === "text") { edit(input, s, e, multi ? ev.s : ev.s.replace(/[\r\n\t]+/g, " ")); return; }
+    var k = ev.k;
+    if (k === "Backspace") {
+      if (s === e) { if (!s) return; s = ev.ctrl ? wordLeft(v, s) : s - 1; }
+      return edit(input, s, e, "");
+    }
+    if (k === "Delete") {
+      if (s === e) { if (e >= v.length) return; e = ev.ctrl ? wordRight(v, e) : e + 1; }
+      return edit(input, s, e, "");
+    }
+    if (k === "Enter") {
+      var go = inputEnter[input.id];
+      if (go && !ev.shift) return go();
+      if (multi) edit(input, s, e, "\n");
+      return;
+    }
+    if (k === "SelectAll") { selAnchor = null; input.setSelectionRange(0, v.length); return; }
+    // caret moves (Shift extends the selection)
+    var focus = s;
+    if (ev.shift && selAnchor !== null) focus = (selAnchor === s) ? e : s;
+    else if (ev.shift) { selAnchor = s; focus = e; }
+    var p = focus;
+    if (k === "ArrowLeft") p = (!ev.shift && s !== e) ? s : (ev.ctrl ? wordLeft(v, focus) : Math.max(0, focus - 1));
+    else if (k === "ArrowRight") p = (!ev.shift && s !== e) ? e : (ev.ctrl ? wordRight(v, focus) : Math.min(v.length, focus + 1));
+    else if (k === "Home") p = (ev.ctrl || !multi) ? 0 : lineStart(v, focus);
+    else if (k === "End") p = (ev.ctrl || !multi) ? v.length : lineEnd(v, focus);
+    else if ((k === "ArrowUp" || k === "ArrowDown") && multi) {
+      var ls = lineStart(v, focus), col = focus - ls;
+      if (k === "ArrowUp") p = ls === 0 ? 0 : Math.min(lineStart(v, ls - 1) + col, ls - 1);
+      else { var le = lineEnd(v, focus); p = le >= v.length ? v.length : Math.min(le + 1 + col, lineEnd(v, le + 1)); }
+    } else return;                              // Tab, Page Up/Down, Insert: nothing to do
+    if (ev.shift) input.setSelectionRange(Math.min(selAnchor, p), Math.max(selAnchor, p));
+    else { selAnchor = null; input.setSelectionRange(p, p); }
+  }
+
   function wireInput(input, onEnter) {
+    if (onEnter) inputEnter[input.id] = onEnter;
     input.addEventListener("focus", function () {
       keyboardOwner = input.id;
+      selAnchor = null;
       armIdleBlur();
+      clearTimeout(keysOffTimer);
+      if (!keysWanted) wantKeys(true);
     });
     input.addEventListener("blur", function () {
       if (keyboardOwner === input.id) { keyboardOwner = null; clearTimeout(idleTimer); }
+      clearTimeout(keysOffTimer);
+      // moving straight to another field keeps the keyboard
+      keysOffTimer = setTimeout(function () { if (!keyboardOwner && keysWanted) wantKeys(false); }, 120);
     });
     input.addEventListener("input", armIdleBlur);
     var lastEnter = 0;
@@ -1050,6 +1184,7 @@
     });
     updateClock();
     setInterval(updateClock, 1000);
+    setInterval(watchLayout, 150);
     // the panel losing focus (a click in the cockpit, another window) gives the keyboard back;
     // moving the mouse alone does not
     window.addEventListener("blur", releaseKeyboard);

@@ -12,6 +12,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .keyhook import KeyCapture
 from .session import Session
 
 log = logging.getLogger("clearway.server")
@@ -37,6 +38,7 @@ def lan_ip() -> str:
 class Handler(BaseHTTPRequestHandler):
     server_version = "Clearway"
     session: Session = None  # set by make_server
+    keys: KeyCapture = None
 
     # Keep the console clean; errors still go to the log file.
     def log_message(self, fmt, *args):
@@ -109,6 +111,11 @@ class Handler(BaseHTTPRequestHandler):
             q = lambda k: (query.get(k) or [""])[0]  # noqa: E731
             items = self.session.vpilot_poll(q("connected") == "1", q("callsign"), q("cid"), q("observer") == "1")
             return self._json({"ok": True, "items": items})
+        if url.path == "/api/keys":                 # MSFS panel: keys typed while it holds the keyboard
+            if not self._is_local():
+                return self._json({"error": "only available on this PC"}, 403)
+            since = (query.get("since") or ["0"])[0]
+            return self._json(self.keys.poll(int(since) if since.isdigit() else 0))
         if url.path.startswith("/api/"):
             return self._json({"error": "not found"}, 404)
         return self._static(url.path)
@@ -123,8 +130,11 @@ class Handler(BaseHTTPRequestHandler):
         action = url.path[len("/api/"):]
         body = self._read_body()
         s = self.session
-        if action.startswith("vpilot/") and not self._is_local():
+        if (action.startswith("vpilot/") or action.startswith("keys/")) and not self._is_local():
             return self._json({"error": "only available on this PC"}, 403)
+        if action == "keys/capture":
+            active = self.keys.set_capture(bool(body.get("on")))
+            return self._json({"ok": True, "active": active, "seq": self.keys.seq})
         try:
             if action == "quick":            # tapped button on a phone notification
                 s.reply(int(query["id"][0]), query["r"][0])
@@ -237,6 +247,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def make_server(session: Session, port: int) -> ThreadingHTTPServer:
     Handler.session = session
+    Handler.keys = KeyCapture(enabled=lambda: session.cfg.get("panel_capture_keys"))
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     server.daemon_threads = True
     return server

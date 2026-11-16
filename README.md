@@ -96,6 +96,8 @@ vPilot doesn't let plugins set the squawk code or tune radios, so `.x`/`.squawk`
 
 The panel is a transparent full-screen layer, and only the icon and card catch the mouse. It's designed for 16:9 screens (1080p, 1440p, 4K).
 
+While you type in a panel text field, Clearway keeps the keys away from MSFS key bindings and from programs such as ChasePlane, so typing never moves the camera or flips a switch. Controllers (yoke, throttle, joystick) keep working. Press **Esc** or click anywhere outside the panel to hand the keyboard back. This can be switched off in Clearway's settings.
+
 ## Using it
 
 1. In **Requests → ATC logon**, enter the station (e.g. `EGGX`, `CZQX`, `KZNY`) and press **Log on**.

@@ -228,6 +228,7 @@
     $("setBrowser").checked = st.open_browser_on_start;
     $("setVpAuto").checked = st.vpilot_auto_connect;
     $("setVpAll").checked = st.vpilot_all_frequency;
+    $("setKeys").checked = st.panel_capture_keys;
     const vp = s.vpilot || {};
     $("vpStatus").textContent = !vp.active ? "Plugin not detected. Install it and restart vPilot."
       : vp.connected ? `Plugin running · vPilot connected as ${vp.callsign}` : "Plugin running · vPilot not connected to VATSIM";
@@ -401,7 +402,7 @@
     if (ok) { settingsDirty = false; $("setLogon").value = ""; }
   };
   const toggles = { setNtfy: "ntfy_enabled", setMute: "mute_phone_when_panel_open", setAdsc: "adsc_enabled", setBrowser: "open_browser_on_start",
-    setVpAuto: "vpilot_auto_connect", setVpAll: "vpilot_all_frequency" };
+    setVpAuto: "vpilot_auto_connect", setVpAll: "vpilot_all_frequency", setKeys: "panel_capture_keys" };
   Object.entries(toggles).forEach(([id, k]) => $(id).addEventListener("change", (e) => act("settings", { [k]: e.target.checked })));
   $("setLight").addEventListener("change", (e) => { applyTheme(e.target.checked ? "light" : "dark"); act("settings", { theme: e.target.checked ? "light" : "dark" }); });
 

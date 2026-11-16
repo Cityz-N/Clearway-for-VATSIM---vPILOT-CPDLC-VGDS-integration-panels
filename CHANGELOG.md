@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.1
+
+- MSFS panel: fixed the card sometimes opening partly off screen (mostly with the icon near the bottom or top edge) until the icon was moved. The card now keeps itself on screen whenever its content or the window changes size
+
+## 0.9.0
+
+- MSFS panel: while you type in a panel text field, the keys no longer reach MSFS key bindings or other programs such as ChasePlane, so typing doesn't move the camera or trigger sim commands. Clearway holds the keyboard and types into the panel itself. Controllers keep working, and function keys, Alt+Tab and the Windows key work as usual
+- The keyboard goes back to the sim on Esc, a click outside the panel, 15 seconds without typing, or if the panel stops answering
+- Text editing in the panel: arrows (Up/Down move between lines in the notepad), Home/End, Shift to select, Ctrl+A, Ctrl+V (paste from Windows), Ctrl+Backspace, accents and dead keys follow your keyboard layout
+- New setting to switch this off (Options: "MSFS panel: keep typed keys away from the sim and other programs")
+
 ## 0.8.0
 
 - vPilot: "Connect as observer" tickbox in the connect form (panel and phone). An observer only needs a callsign; Clearway shows "(observer)" and greys out the transponder buttons
