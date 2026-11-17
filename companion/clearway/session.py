@@ -16,6 +16,7 @@ from . import notify, vatsim
 from .config import Config
 from .hoppie import HoppieClient, HoppieError, Incoming, build_cpdlc, parse_cpdlc
 from .tags import classify
+from .selcal import SelcalMixin
 from .vpilot import FREQ, VP_KINDS, VpilotMixin
 
 log = logging.getLogger("clearway.session")
@@ -43,7 +44,7 @@ def reply_options(msg: dict) -> list[str]:
     return []
 
 
-class Session(VpilotMixin):
+class Session(VpilotMixin, SelcalMixin):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.lock = threading.RLock()
@@ -64,9 +65,11 @@ class Session(VpilotMixin):
         self.position: dict | None = None      # {lat, lon, alt, ts, source}
         self._vatsim_pos_ts = 0.0
         self.panel_seen = 0.0
+        self.panel_paused = False              # MSFS panel notifications paused (pause button)
         self.fast_until = 0.0
         self.base_url = ""                      # http://<lan-ip>:<port>, set by the server
         self._vp_init()
+        self._selcal_init()
         self._client: HoppieClient | None = None
         self._stop = threading.Event()
         self._wake = threading.Event()
@@ -427,7 +430,8 @@ class Session(VpilotMixin):
     def _notify(self, msg: dict, priority: int | None = None) -> None:
         if not self.cfg.get("ntfy_enabled") or not self.cfg.get("ntfy_topic"):
             return
-        if self.cfg.get("mute_phone_when_panel_open") and self.panel_active():
+        # the phone stays quiet while the panel is open, unless its notifications are paused
+        if self.cfg.get("mute_phone_when_panel_open") and self.panel_active() and not self.panel_paused:
             return
         key = self.cfg.get("pair_key")
         title = {"cpdlc": "CPDLC", "telex": "Telex", "info": "Info", "pm": "Message", "radio": "Frequency",
@@ -665,5 +669,6 @@ class Session(VpilotMixin):
                           for m in reversed(self.trash) if m["dir"] != "sys"],
                 "settings": self.cfg.public(),
                 "base_url": self.base_url,
-                "vpilot": self.vpilot_snapshot(),
+                "vpilot": {**self.vpilot_snapshot(), "fp_status": self.fp_status},
+                "selcal": self.selcal_snapshot(),
             }

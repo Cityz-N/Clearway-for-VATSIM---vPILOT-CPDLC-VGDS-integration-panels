@@ -27,6 +27,7 @@
           <svg viewBox="0 0 24 24" class="cw-glyph"><path d="M12 3.6c-4.7 0-8.5 3.3-8.5 7.4 0 2.2 1.1 4.2 3 5.6L6 20l4-1.9c.6.1 1.3.2 2 .2 4.7 0 8.5-3.3 8.5-7.4S16.7 3.6 12 3.6z"/></svg>
           <span class="cw-ndot vp hidden" id="cw-ndot-vp"></span>
           <span class="cw-ndot cp hidden" id="cw-ndot-cp"></span>
+          <span class="cw-pause-mark"></span>
         </div>
 
         <!-- right click on the icon: peek at the latest message -->
@@ -38,8 +39,12 @@
             <div class="cw-tabs">
               <div class="cw-tab" data-tab="vpilot">vPilot<span class="cw-tdot vp hidden" id="cw-tdot-vp"></span></div>
               <div class="cw-tab" data-tab="cpdlc">CPDLC<span class="cw-tdot cp hidden" id="cw-tdot-cp"></span></div>
+              <div class="cw-tab" data-tab="selcal">SELCAL</div>
             </div>
             <span class="cw-clock utc" id="cw-clock" title="Click: UTC / sim time / local time">--:--:--z</span>
+            <div class="cw-icon-btn" id="cw-pause" title="Pause panel notifications">
+              <svg viewBox="0 0 24 24"><path class="cw-i-pause" d="M9 6v12M15 6v12"/><path class="cw-i-play" d="M8 5.5v13l10.5-6.5z"/></svg>
+            </div>
             <div class="cw-icon-btn" id="cw-lock" title="Lock where the card opens">
               <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path class="cw-shackle-open" d="M8 11V8a4 4 0 0 1 7.6-1.7"/><path class="cw-shackle-closed" d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
             </div>
@@ -56,6 +61,7 @@
             <div class="cw-bar">
               <span class="cw-dot" id="cw-vp-dot"></span>
               <span class="cw-bar-title" id="cw-vp-cs">vPilot</span>
+              <span class="cw-fp-warn hidden" id="cw-fp-warn" title="No flight plan filed on VATSIM for this callsign">FP status</span>
               <div class="cw-mini" id="cw-vp-sby" title="Transponder standby">SBY</div>
               <div class="cw-mini" id="cw-vp-c" title="Transponder Mode C">C</div>
               <div class="cw-mini" id="cw-vp-id" title="Squawk ident">ID</div>
@@ -66,6 +72,11 @@
                 <input id="cw-vp-cs-in" class="cw-input cw-field third" type="text" placeholder="Callsign"/>
                 <input id="cw-vp-type-in" class="cw-input cw-field third" type="text" placeholder="Type"/>
                 <input id="cw-vp-selcal-in" class="cw-input cw-field third" type="text" placeholder="SELCAL"/>
+              </div>
+              <div class="cw-vp-under">
+                <span class="cw-vp-sb" id="cw-vp-sb" title="Callsign of your latest SimBrief flight plan (click to use it)"></span>
+                <span class="cw-vp-sb-ref" id="cw-vp-sb-ref" title="Fetch your latest SimBrief flight plan"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></span>
+                <span class="cw-vp-sc-st hidden" id="cw-vp-sc-st"></span>
               </div>
               <div class="cw-check" id="cw-vp-obs"><span class="cw-box"><svg viewBox="0 0 12 12"><path d="M2.5 6.4l2.4 2.4 4.6-5"/></svg></span>Connect as observer</div>
               <div class="cw-btn primary full" id="cw-vp-connect-go">Connect to VATSIM</div>
@@ -123,6 +134,56 @@
                   <div class="cw-btn primary" id="cw-send">Send</div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- ======================= SELCAL ======================= -->
+          <div id="cw-pane-selcal" class="hidden">
+            <div class="cw-bar">
+              <span class="cw-bar-title">SELCAL</span>
+              <span class="cw-sc-feed" id="cw-sc-feed"></span>
+              <div class="cw-mini wide" id="cw-sc-sb" title="Read the SELCAL of your latest SimBrief flight plan">SimBrief</div>
+            </div>
+            <div class="cw-sc-body">
+              <div class="cw-sc-sbuser hidden" id="cw-sc-sbuser">
+                <div class="cw-row">
+                  <input id="cw-sc-sbuser-in" class="cw-input" type="text" placeholder="SimBrief username or pilot ID"/>
+                  <div class="cw-btn primary" id="cw-sc-sbuser-go">Fetch</div>
+                </div>
+              </div>
+              <div class="cw-sc-ofp hidden" id="cw-sc-ofp"></div>
+              <div class="cw-sc-cs">
+                <div class="cw-sc-tile" id="cw-sc-tile">-</div>
+                <input id="cw-sc-callsign" class="cw-input" type="text" placeholder="Callsign, e.g. AFR123"/>
+              </div>
+              <div class="cw-sc-airline" id="cw-sc-airline"></div>
+              <div class="cw-sc-codes">
+                <div class="cw-sc-code-box">
+                  <div class="cw-sc-label">Standard <span>16-tone</span></div>
+                  <div class="cw-sc-code" id="cw-sc-std">--&nbsp;--</div>
+                  <div class="cw-sc-used" id="cw-sc-std-used"></div>
+                </div>
+                <div class="cw-sc-code-box ext">
+                  <div class="cw-sc-label">Extended <span>32-tone</span></div>
+                  <div class="cw-sc-code" id="cw-sc-ext">--&nbsp;--</div>
+                  <div class="cw-sc-used" id="cw-sc-ext-used"></div>
+                </div>
+              </div>
+              <div class="cw-row cw-sc-actions">
+                <div class="cw-btn primary" id="cw-sc-gen">Generate</div>
+                <div class="cw-btn" id="cw-sc-save">Save</div>
+                <div class="cw-btn" id="cw-sc-use" title="Put the standard code in vPilot's connect form">Use in vPilot</div>
+              </div>
+              <div class="cw-hint" id="cw-sc-hint"></div>
+              <div class="cw-sc-check">
+                <input id="cw-sc-check-in" class="cw-input" type="text" placeholder="Check a code, e.g. AB-CD"/>
+                <div class="cw-btn" id="cw-sc-check-go">Check</div>
+              </div>
+              <div class="cw-sc-check-res hidden" id="cw-sc-check-res"></div>
+            </div>
+            <div class="cw-section">
+              <div class="cw-section-head" id="cw-sc-saved-toggle"><span id="cw-sc-saved-title">Saved</span><span class="cw-chev closed" id="cw-sc-saved-chev"></span></div>
+              <div class="cw-list cw-sc-saved hidden" id="cw-sc-saved"></div>
             </div>
           </div>
 

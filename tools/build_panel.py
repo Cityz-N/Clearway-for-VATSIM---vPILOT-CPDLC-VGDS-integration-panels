@@ -28,7 +28,9 @@ ROOT = Path(__file__).resolve().parent.parent
 PANEL = ROOT / "msfs-panel"
 DIST = ROOT / "dist" / "clearway-panel"
 PACKAGE_NAME = "clearway-panel"
-VERSION = "0.9.1"
+VERSION = "0.9.7"
+# MSFS package manifests use X.Y.Z; a fourth part (hotfix) is dropped there
+MANIFEST_VERSION = ".".join(VERSION.split(".")[:3])
 
 
 def find_sdk_tool() -> Path:
@@ -85,7 +87,7 @@ def assemble(spb: Path) -> None:
         "title": "Clearway CPDLC Panel",
         "manufacturer": "Clearway",
         "creator": "Clearway contributors",
-        "package_version": VERSION,
+        "package_version": MANIFEST_VERSION,
         "minimum_game_version": "1.35.21",
         "release_notes": {"neutral": {"LastUpdate": "", "OlderHistory": ""}},
         "total_package_size": "0",

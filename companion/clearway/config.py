@@ -56,6 +56,7 @@ DEFAULTS = {
     # MSFS panel: while a panel text field has the cursor, Clearway holds back key presses from
     # MSFS and other programs (ChasePlane...) and types them into the panel itself
     "panel_capture_keys": True,
+    "simbrief_user": "",              # SimBrief username or pilot ID (SELCAL tab: latest flight plan)
     "config_version": 2,
     # Local web server
     "port": 8787,
@@ -113,7 +114,7 @@ class Config:
             "adsc_enabled": bool, "open_browser_on_start": bool, "theme": str,
             "vpilot_auto_connect": bool, "vpilot_all_frequency": bool,
             "vpilot_callsign": str, "vpilot_type": str, "vpilot_selcal": str, "vpilot_observer": bool,
-            "panel_capture_keys": bool,
+            "panel_capture_keys": bool, "simbrief_user": str,
         }
         for key, kind in editable.items():
             if key in data:

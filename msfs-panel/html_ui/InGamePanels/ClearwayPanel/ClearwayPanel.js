@@ -77,8 +77,20 @@
     });
   }
 
+  // Pause button: no flashing / colour / counters on the icon. Clearway then stops muting the phone.
+  var paused = false;
+  function setPaused(on) {
+    paused = !!on;
+    save("CLEARWAY_PAUSED", paused);
+    var b = el("cw-pause");
+    b.classList.toggle("paused", paused);
+    b.title = paused ? "Notifications paused: click to resume" : "Pause panel notifications";
+    if (state) render();
+    poll(true);
+  }
+
   function poll(force) {
-    request("GET", "/api/state?panel=1&since=" + (force ? 0 : version), null, function (ok, data) {
+    request("GET", "/api/state?panel=1&paused=" + (paused ? 1 : 0) + "&since=" + (force ? 0 : version), null, function (ok, data) {
       if (!ok) {
         if (reachable) { reachable = false; render(); }
         return;
@@ -197,19 +209,26 @@
     bubble.className = "";
     if (status === "online" || vpOnline) bubble.classList.add("online");
     if (!reachable) bubble.classList.add("error");
-    if (!vpCount && !cpCount && !expanded) bubble.classList.add("idle");   // nearly invisible until needed
-    if (cpCount > 0) bubble.classList.add("alert");          // CPDLC waiting: amber
-    else if (vpCount > 0) bubble.classList.add("alert-vp");   // only vPilot waiting: cyan
-    if (vpCount > lastVp || cpCount > lastCp) {
-      bubble.classList.add(cpCount > lastCp ? "flash" : "flash-vp");
-      setTimeout(function () { el("cw-bubble").classList.remove("flash"); el("cw-bubble").classList.remove("flash-vp"); }, 2900);
+    if (paused) {
+      // notifications paused: the icon stays faint and quiet (no flash, colour or counters)
+      bubble.classList.add("paused");
+      if (!expanded) bubble.classList.add("idle");
+    } else {
+      if (!vpCount && !cpCount && !expanded) bubble.classList.add("idle");   // nearly invisible until needed
+      if (cpCount > 0) bubble.classList.add("alert");          // CPDLC waiting: amber
+      else if (vpCount > 0) bubble.classList.add("alert-vp");   // only vPilot waiting: cyan
+      if (vpCount > lastVp || cpCount > lastCp) {
+        bubble.classList.add(cpCount > lastCp ? "flash" : "flash-vp");
+        setTimeout(function () { el("cw-bubble").classList.remove("flash"); el("cw-bubble").classList.remove("flash-vp"); }, 2900);
+      }
     }
     lastVp = vpCount; lastCp = cpCount;
-    setDot("cw-ndot-vp", vpCount); setDot("cw-ndot-cp", cpCount);
+    setDot("cw-ndot-vp", paused ? 0 : vpCount); setDot("cw-ndot-cp", paused ? 0 : cpCount);
     setDot("cw-tdot-vp", vpCount); setDot("cw-tdot-cp", cpCount);
 
     renderVpilot();
     renderCpdlc();
+    renderSelcal();
     renderNotes();
     if (expanded) placeCard();
   }
@@ -228,6 +247,7 @@
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle("on", attr(tabs[i], "data-tab") === t && !notesOpen);
     el("cw-pane-vpilot").classList.toggle("hidden", t !== "vpilot" || notesOpen);
     el("cw-pane-cpdlc").classList.toggle("hidden", t !== "cpdlc" || notesOpen);
+    el("cw-pane-selcal").classList.toggle("hidden", t !== "selcal" || notesOpen);
     el("cw-notes").classList.toggle("hidden", !notesOpen);
     el("cw-notes-btn").classList.toggle("on", notesOpen);
     lastChatKey = "";
@@ -279,6 +299,11 @@
     el("cw-vp-dot").className = "cw-dot " + (!vp.active ? "" : vp.connected ? "online" : "connecting");
     el("cw-vp-cs").textContent = !reachable ? "Clearway not running" : !vp.active ? "vPilot plugin not found" :
       vp.connected ? vp.callsign + (vp.observer ? " (observer)" : "") : "vPilot offline";
+    // connected, but VATSIM has no flight plan for this callsign (or only a prefile)
+    var fpWarn = el("cw-fp-warn");
+    fpWarn.classList.toggle("hidden", !(vp.connected && !vp.observer && (vp.fp_status === "none" || vp.fp_status === "prefiled")));
+    fpWarn.title = vp.fp_status === "prefiled" ? "Only a prefile on VATSIM: the flight plan isn't active for this connection"
+      : "No flight plan filed on VATSIM for " + (vp.callsign || "this callsign");
     var conn = el("cw-vp-conn");
     conn.textContent = vp.connected ? "Disconnect" : "Connect";
     conn.classList.toggle("danger", !!vp.connected);
@@ -295,6 +320,7 @@
     prefillInput("cw-vp-type-in", last.type || f.aircraft);
     prefillInput("cw-vp-selcal-in", last.selcal);
     if (observerTick === null && state && state.vpilot) setObserverTick(!!last.observer);   // last choice
+    renderVpSimbrief();
 
     var chats = chatList(), found = false, html = "";
     for (var i = 0; i < chats.length; i++) if (chats[i].name === activeChat) found = true;
@@ -641,6 +667,254 @@
   function renderNotes() {
     var ta = el("cw-notes-text");
     if (state && !notesDirty && document.activeElement !== ta && ta.value !== (state.notes || "")) ta.value = state.notes || "";
+  }
+
+  // ------------------------------------------------------------ render: SELCAL
+  // Generate standard / extended codes that no one on VATSIM uses or has prefiled, read the code of
+  // the latest SimBrief flight plan, and keep codes for 24 hours (shared with the phone).
+  var airlines = {};             // ICAO -> [IATA, name], loaded once from Clearway
+  var scSavedOpen = false, scUserOpen = false;
+  function airlineFor(cs) {
+    var m = /^([A-Z]{3})(\d[A-Z0-9]*)?$/.exec(cs || "");
+    if (!m || !airlines[m[1]]) return null;
+    return { iata: airlines[m[1]][0], name: airlines[m[1]][1] };
+  }
+  function scCallsign() { return el("cw-sc-callsign").value.toUpperCase().replace(/[^A-Z0-9]/g, ""); }
+  function fillTile(tile, cs) {
+    if (attr(tile, "data-cs") === cs) return;
+    tile.setAttribute("data-cs", cs);
+    var airline = airlineFor(cs);
+    tile.textContent = cs.slice(0, 3) || "-";
+    tile.classList.remove("logo");
+    if (!airline) return;
+    var img = new Image();
+    img.onload = function () {
+      if (attr(tile, "data-cs") !== cs) return;
+      tile.textContent = "";
+      tile.classList.add("logo");
+      tile.appendChild(img);
+    };
+    img.src = "https://pics.avs.io/120/60/" + airline.iata + ".png";
+  }
+  function usedText(list, id) {
+    var u = el(id);
+    if (!u) return;
+    if (list === null || list === undefined) { u.className = "cw-sc-used"; u.textContent = "Not checked on VATSIM"; return; }
+    if (!list.length) { u.className = "cw-sc-used free"; u.textContent = "Free on VATSIM"; return; }
+    u.className = "cw-sc-used taken";
+    u.textContent = "Used by " + list[0].callsign + (list[0].where === "prefiled" ? " (prefiled)" : "") +
+      (list.length > 1 ? " +" + (list.length - 1) : "");
+  }
+  function isExtended(code) { return /[T-Z1-9]/.test(String(code || "").replace("-", "")); }
+  function left(s) {
+    var m = Math.floor(s / 60), h = Math.floor(m / 60);
+    return m < 1 ? "under a minute left" : h ? h + "h " + (m % 60) + "m left" : m + "m left";
+  }
+
+  function renderSelcal() {
+    var sc = (state && reachable && state.selcal) || null;
+    var feed = el("cw-sc-feed");
+    if (!sc) { feed.textContent = reachable ? "" : "Clearway not running"; feed.className = "cw-sc-feed err"; return; }
+    var v = sc.vatsim || {};
+    feed.textContent = v.checked ? "VATSIM: " + v.count + " flight plans" : (v.error || "VATSIM not checked yet");
+    feed.className = "cw-sc-feed" + (v.checked ? " ok" : v.error ? " err" : "");
+    // SimBrief
+    el("cw-sc-sbuser").classList.toggle("hidden", !scUserOpen);
+    prefillInput("cw-sc-sbuser-in", sc.simbrief_user);
+    var ofp = sc.simbrief, box = el("cw-sc-ofp");
+    if (ofp) {
+      var route = [ofp.departure && ofp.arrival ? ofp.departure + "-" + ofp.arrival : "", ofp.aircraft].join(" ").trim();
+      box.innerHTML = "<div class=\"cw-sc-ofp-top\"><span class=\"cw-sc-ofp-tag\">SIMBRIEF</span>" +
+        "<span class=\"cw-sc-ofp-cs\">" + esc(ofp.callsign || "-") + "</span><span class=\"cw-sc-ofp-route\">" + esc(route) + "</span></div>" +
+        (ofp.selcal
+          ? "<div class=\"cw-sc-ofp-code\"><b>" + esc(ofp.selcal) + "</b><span class=\"cw-sc-used\" id=\"cw-sc-ofp-used\"></span>" +
+            (isExtended(ofp.selcal) ? "" : "<span class=\"cw-mini\" data-sc-ofp=\"use\">Use in vPilot</span>") +
+            "<span class=\"cw-mini\" data-sc-ofp=\"save\">Save</span></div>"
+          : "<div class=\"cw-sc-ofp-code\"><span class=\"cw-sc-used\">No SELCAL in this flight plan. Generate one below and add it in SimBrief.</span></div>");
+      box.classList.remove("hidden");
+      if (ofp.selcal) usedText(ofp.used_by, "cw-sc-ofp-used");
+    } else box.classList.add("hidden");
+    // generator
+    var cur = sc.current, vp = state.vpilot || {};
+    prefillInput("cw-sc-callsign", (cur && cur.callsign) || (vp.connected && vp.callsign) || (ofp && ofp.callsign) || state.callsign);
+    fillTile(el("cw-sc-tile"), scCallsign());
+    var al = airlineFor(scCallsign());
+    el("cw-sc-airline").textContent = al ? al.name : "";
+    el("cw-sc-std").textContent = cur ? cur.std : "-- --";
+    el("cw-sc-ext").textContent = cur ? cur.ext : "-- --";
+    usedText(cur ? cur.std_used : null, "cw-sc-std-used");
+    usedText(cur ? cur.ext_used : null, "cw-sc-ext-used");
+    if (!cur) { el("cw-sc-std-used").textContent = ""; el("cw-sc-ext-used").textContent = ""; }
+    // code typed by hand
+    var chk = sc.checked, res = el("cw-sc-check-res");
+    if (chk) {
+      res.innerHTML = "<b>" + esc(chk.code) + "</b><span class=\"cw-sc-used\" id=\"cw-sc-chk-used\"></span>" +
+        (isExtended(chk.code) ? "" : "<span class=\"cw-mini\" data-sc-chk=\"use\">Use in vPilot</span>") +
+        "<span class=\"cw-mini\" data-sc-chk=\"save\">Save</span>";
+      res.classList.remove("hidden");
+      usedText(chk.used_by, "cw-sc-chk-used");
+    } else res.classList.add("hidden");
+    el("cw-sc-save").classList.toggle("disabled", !cur);
+    el("cw-sc-use").classList.toggle("disabled", !cur);
+    // saved codes
+    var saved = sc.saved || [];
+    el("cw-sc-saved-title").textContent = "Saved" + (saved.length ? " (" + saved.length + ")" : "") + " - kept 24 hours";
+    el("cw-sc-saved").classList.toggle("hidden", !scSavedOpen);
+    el("cw-sc-saved-chev").classList.toggle("closed", !scSavedOpen);
+    if (scSavedOpen) {
+      el("cw-sc-saved").innerHTML = saved.length ? saved.map(function (e) {
+        var codes = (e.std ? "<div><i>STD</i>" + esc(e.std) + "</div>" : "") + (e.ext ? "<div><i>EXT</i>" + esc(e.ext) + "</div>" : "");
+        return "<div class=\"cw-sc-row\"><div class=\"cw-sc-tile\" data-tile=\"" + esc(e.callsign) + "\"></div>" +
+          "<div class=\"cw-sc-who\"><b>" + esc(e.callsign) + "</b><span>" + esc([e.airline && e.airline.name, left(e.left)].filter(Boolean).join(" - ")) + "</span></div>" +
+          "<div class=\"cw-sc-rcodes\">" + codes + "</div>" +
+          "<span class=\"cw-del\" data-sc-del=\"" + esc(e.callsign) + "|" + e.generated + "\" title=\"Remove\">" + X_ICON + "</span></div>";
+      }).join("") : "<div class=\"cw-empty\">Nothing saved in the last 24 hours.</div>";
+      var tiles = el("cw-sc-saved").querySelectorAll("[data-tile]");
+      for (var i = 0; i < tiles.length; i++) fillTile(tiles[i], attr(tiles[i], "data-tile"));
+    }
+  }
+
+  function scGenerate() {
+    act("selcal/generate", { callsign: scCallsign() }, "", "cw-sc-hint");
+  }
+  // vPilot connect form: small availability line under the SELCAL field
+  var vpScTimer = null, vpScSeq = 0;
+  function vpSelcalCheck(delay) {
+    clearTimeout(vpScTimer);
+    var st = el("cw-vp-sc-st");
+    var code = el("cw-vp-selcal-in").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (code.length < 4 || el("cw-vp-connect").classList.contains("hidden")) { st.classList.add("hidden"); vpScSeq++; return; }
+    st.className = "cw-vp-sc-st";
+    st.innerHTML = "<span class=\"cw-spin\"></span>check. avail...";
+    var seq = ++vpScSeq;
+    vpScTimer = setTimeout(function () {
+      request("POST", "/api/selcal/check", { code: code, remember: false, exclude: el("cw-vp-cs-in").value }, function (ok, data) {
+        if (seq !== vpScSeq) return;            // the field changed meanwhile
+        if (!ok) { st.className = "cw-vp-sc-st bad"; st.textContent = reachable ? "invalid code" : ""; return; }
+        var used = data.used_by;
+        if (used === null || used === undefined) { st.className = "cw-vp-sc-st"; st.textContent = "not checked"; }
+        else if (!used.length) { st.className = "cw-vp-sc-st free"; st.textContent = "avail."; }
+        else {
+          st.className = "cw-vp-sc-st taken";
+          st.textContent = "taken by " + used[0].callsign + (used.length > 1 ? " +" + (used.length - 1) : "");
+        }
+      });
+    }, delay === undefined ? 500 : delay);
+  }
+
+  // vPilot connect form: "SB: CALLSIGN" from the latest SimBrief flight plan, to compare with what's typed
+  var sbBusy = false;
+  function renderVpSimbrief() {
+    var sc = state && reachable && state.selcal, sb = el("cw-vp-sb");
+    var ofp = sc && sc.simbrief, typed = el("cw-vp-cs-in").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (sbBusy) { sb.className = "cw-vp-sb"; sb.textContent = "SB: fetching..."; return; }
+    if (!sc) { sb.className = "cw-vp-sb"; sb.textContent = ""; return; }
+    if (!sc.simbrief_user) { sb.className = "cw-vp-sb"; sb.textContent = "SB: set up in the SELCAL tab"; return; }
+    if (!ofp || !ofp.callsign) { sb.className = "cw-vp-sb"; sb.textContent = sc.simbrief_error ? "SB: " + sc.simbrief_error : "SB: -"; return; }
+    sb.innerHTML = "SB: <b>" + esc(ofp.callsign) + "</b>";
+    // green when the typed callsign matches the flight plan, amber when it doesn't
+    sb.className = "cw-vp-sb" + (!typed ? "" : typed === ofp.callsign ? " match" : " differ");
+  }
+  function vpSimbriefRefresh() {
+    var sc = state && state.selcal;
+    if (!sc || !sc.simbrief_user) { showTab("selcal"); scUserOpen = true; renderSelcal(); placeCard(); return; }
+    if (sbBusy) return;
+    sbBusy = true;
+    el("cw-vp-sb-ref").classList.add("spinning");
+    renderVpSimbrief();
+    act("selcal/simbrief", {}, null, null, function () {
+      sbBusy = false;
+      el("cw-vp-sb-ref").classList.remove("spinning");
+      renderVpSimbrief();
+    });
+  }
+
+  function scUseInVpilot(code) {
+    act("selcal/use", { code: code }, "", "cw-sc-hint", function (ok, data) {
+      if (!ok) return;
+      el("cw-vp-selcal-in").value = (data.code || code).replace("-", "");
+      vpSelcalCheck(0);
+      hint(data.code + " is set in the vPilot connect form", false, "cw-sc-hint");
+    });
+  }
+  function scFetchSimbrief(user) {
+    hint("Fetching your latest SimBrief flight plan...", false, "cw-sc-hint");
+    var body = user === undefined ? {} : { user: user };
+    act("selcal/simbrief", body, "", "cw-sc-hint", function (ok) {
+      if (ok) { scUserOpen = false; releaseKeyboard(); hint("SimBrief flight plan loaded", false, "cw-sc-hint"); }
+      else scUserOpen = true;
+      renderSelcal();
+      placeCard();
+    });
+  }
+
+  function wireSelcal() {
+    request("GET", "/api/selcal/airlines", null, function (ok, data) {
+      if (ok && data.airlines) { airlines = data.airlines; el("cw-sc-tile").removeAttribute("data-cs"); if (state) renderSelcal(); }
+    });
+    scSavedOpen = load("CLEARWAY_SC_SAVED", false);
+    var cs = el("cw-sc-callsign");
+    wireInput(cs, scGenerate);
+    cs.addEventListener("input", function () {
+      fillTile(el("cw-sc-tile"), scCallsign());
+      var al = airlineFor(scCallsign());
+      el("cw-sc-airline").textContent = al ? al.name : "";
+    });
+    wireInput(el("cw-sc-sbuser-in"), function () { scFetchSimbrief(el("cw-sc-sbuser-in").value.trim()); });
+    el("cw-sc-sbuser-go").addEventListener("click", function () { scFetchSimbrief(el("cw-sc-sbuser-in").value.trim()); });
+    el("cw-sc-sb").addEventListener("click", function () {
+      var sc = state && state.selcal;
+      if (sc && sc.simbrief_user && !scUserOpen) scFetchSimbrief();
+      else { scUserOpen = !scUserOpen || !(sc && sc.simbrief_user); renderSelcal(); placeCard(); if (scUserOpen) el("cw-sc-sbuser-in").focus(); }
+    });
+    el("cw-sc-gen").addEventListener("click", scGenerate);
+    el("cw-sc-save").addEventListener("click", function () {
+      var cur = state && state.selcal && state.selcal.current;
+      if (!cur) return;
+      act("selcal/save", { callsign: scCallsign() || cur.callsign, generated: cur.generated, std: cur.std, ext: cur.ext }, "Saved for 24 hours", "cw-sc-hint");
+    });
+    el("cw-sc-use").addEventListener("click", function () {
+      var cur = state && state.selcal && state.selcal.current;
+      if (cur) scUseInVpilot(cur.std);
+    });
+    el("cw-sc-ofp").addEventListener("click", function (e) {
+      var what = pick(e.target, "data-sc-ofp"), ofp = state && state.selcal && state.selcal.simbrief;
+      if (!what || !ofp || !ofp.selcal) return;
+      if (what === "use") return scUseInVpilot(ofp.selcal);
+      var body = { callsign: ofp.callsign, generated: ofp.fetched };
+      body[isExtended(ofp.selcal) ? "ext" : "std"] = ofp.selcal;
+      act("selcal/save", body, "Saved for 24 hours", "cw-sc-hint");
+    });
+    function scCheck() {
+      var v = el("cw-sc-check-in").value.trim();
+      if (!v) return;
+      act("selcal/check", { code: v }, "", "cw-sc-hint", function (ok, data) {
+        if (ok) { el("cw-sc-check-in").value = data.code; releaseKeyboard(); }
+        placeCard();
+      });
+    }
+    wireInput(el("cw-sc-check-in"), scCheck);
+    el("cw-sc-check-go").addEventListener("click", scCheck);
+    el("cw-sc-check-res").addEventListener("click", function (e) {
+      var what = pick(e.target, "data-sc-chk"), chk = state && state.selcal && state.selcal.checked;
+      if (!what || !chk) return;
+      if (what === "use") return scUseInVpilot(chk.code);
+      var body = { callsign: scCallsign(), generated: chk.ts };
+      body[isExtended(chk.code) ? "ext" : "std"] = chk.code;
+      act("selcal/save", body, "Saved for 24 hours", "cw-sc-hint");
+    });
+    el("cw-sc-saved-toggle").addEventListener("click", function () {
+      scSavedOpen = !scSavedOpen;
+      save("CLEARWAY_SC_SAVED", scSavedOpen);
+      renderSelcal();
+      placeCard();
+    });
+    el("cw-sc-saved").addEventListener("click", function (e) {
+      var d = pick(e.target, "data-sc-del");
+      if (!d) return;
+      var parts = d.split("|");
+      act("selcal/remove", { callsign: parts[0], generated: +parts[1] }, null);
+    });
   }
 
   // ------------------------------------------------------------ layout: icon + card
@@ -1175,6 +1449,10 @@
     placementLock = load("CLEARWAY_LOCK", null);
     updateLockButton();
     el("cw-lock").addEventListener("click", toggleLock);
+    paused = !!load("CLEARWAY_PAUSED", false);
+    el("cw-pause").classList.toggle("paused", paused);
+    el("cw-pause").title = paused ? "Notifications paused: click to resume" : "Pause panel notifications";
+    el("cw-pause").addEventListener("click", function () { setPaused(!paused); });
     clockMode = load("CLEARWAY_CLOCK", "utc");
     if (CLOCK_MODES.indexOf(clockMode) < 0) clockMode = "utc";
     el("cw-clock").addEventListener("click", function () {
@@ -1219,8 +1497,22 @@
       if (!vp.active) return hint("Install the Clearway plugin in vPilot first.", true, "cw-vp-hint");
       if (vp.connected) return act("vp/disconnect", {}, "Disconnecting...", "cw-vp-hint");
       el("cw-vp-connect").classList.toggle("hidden");
+      vpSelcalCheck(0);
+      // first time the form opens: fetch the SimBrief plan if there's none yet
+      var sc = state && state.selcal;
+      if (!el("cw-vp-connect").classList.contains("hidden") && sc && sc.simbrief_user && !sc.simbrief) vpSimbriefRefresh();
       placeCard();
     });
+    el("cw-vp-sb-ref").addEventListener("click", vpSimbriefRefresh);
+    el("cw-vp-sb").addEventListener("click", function () {   // click the SimBrief callsign to use it
+      var ofp = state && state.selcal && state.selcal.simbrief;
+      if (!ofp || !ofp.callsign) return;
+      el("cw-vp-cs-in").value = ofp.callsign;
+      renderVpSimbrief();
+      vpSelcalCheck(0);
+    });
+    el("cw-vp-cs-in").addEventListener("input", renderVpSimbrief);
+    el("cw-vp-selcal-in").addEventListener("input", function () { vpSelcalCheck(); });
     el("cw-vp-connect-go").addEventListener("click", function () {
       act("vp/connect", { callsign: el("cw-vp-cs-in").value, type_code: el("cw-vp-type-in").value, selcal: el("cw-vp-selcal-in").value,
         observer: !!observerTick }, observerTick ? "Connecting as observer..." : "Connecting...", "cw-vp-hint");
@@ -1317,12 +1609,14 @@
       }, 700);
     });
 
+    wireSelcal();
+
     reqOpen = load("CLEARWAY_REQ_OPEN", false);
     el("cw-req").classList.toggle("hidden", !reqOpen);
     el("cw-req-chev").classList.toggle("closed", !reqOpen);
     setReqKind("logon");
     // ?open=vpilot|cpdlc opens the card on that tab (used to take documentation screenshots in a browser)
-    var openParam = /[?&]open=(vpilot|cpdlc)/.exec(window.location.search || "");
+    var openParam = /[?&]open=(vpilot|cpdlc|selcal)/.exec(window.location.search || "");
     showTab(openParam ? openParam[1] : load("CLEARWAY_TAB", "vpilot"));
     setExpanded(openParam ? true : load("CLEARWAY_EXPANDED", false));
     // ?atc=CALLSIGN opens Nearby ATC with that controller expanded (documentation screenshots)

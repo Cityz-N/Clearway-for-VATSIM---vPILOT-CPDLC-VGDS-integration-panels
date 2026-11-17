@@ -33,7 +33,9 @@ You can use both at the same time; they stay in sync.
 - Dark theme by default, with a light theme in Settings that also applies to the MSFS panel
 - Runs quietly as a tray icon with no console window
 - **vPilot tab** (with the vPilot plugin): frequency chat plus one tab per private chat, nearby controllers (tap the arrow for their information), connect/disconnect, Mode C/standby, ident, and vPilot's dot commands. Clearway also connects to Hoppie automatically as soon as vPilot connects.
-- Two tabs everywhere: **vPilot** on the left, **CPDLC** on the right. Unread counters are cyan for vPilot and amber for CPDLC, on the tabs and on the panel's floating icon.
+- Tabs everywhere: **vPilot**, **CPDLC** and **SELCAL**. Unread counters are cyan for vPilot and amber for CPDLC, on the tabs and on the panel's floating icon.
+- **SELCAL tab**: generates standard and extended SELCAL codes that no one on VATSIM is using or has prefiled, reads the SELCAL of your latest SimBrief flight plan and checks it the same way, saves codes for 24 hours, and can put the code in vPilot's connect form
+- **FP status** warning in the vPilot tab when you're connected but VATSIM has no flight plan filed for your callsign
 - Notepad shared between the phone, the PC page and the MSFS panel
 - VDGS shortcut on the phone: opens the official VDGS page ([vats.im/vdgs](https://vats.im/vdgs)) for your TOBT, TSAT and start-up window
 

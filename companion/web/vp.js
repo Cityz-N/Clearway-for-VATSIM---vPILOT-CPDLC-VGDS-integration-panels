@@ -64,6 +64,11 @@
     const dot = $("vpStateDot");
     dot.className = "dot " + (!vp.active ? "" : vp.connected ? "online" : "connecting");
     $("vpWho").textContent = !vp.active ? "vPilot plugin not detected" : vp.connected ? vp.callsign : "vPilot offline";
+    // connected, but VATSIM shows no flight plan for this callsign (or only a prefile)
+    const fpWarn = vp.connected && !vp.observer && (vp.fp_status === "none" || vp.fp_status === "prefiled");
+    $("vpFpWarn").hidden = !fpWarn;
+    $("vpFpWarn").title = vp.fp_status === "prefiled" ? "Only a prefile on VATSIM: the flight plan isn't active for this connection"
+      : `No flight plan filed on VATSIM for ${vp.callsign || "this callsign"}`;
     $("vpWhoSub").textContent = !vp.active ? "Install the Clearway plugin and restart vPilot (see Settings)."
       : vp.connected ? (vp.observer ? "Connected to VATSIM as an observer" : "Connected to VATSIM") : "Not connected to VATSIM";
     if (!obsTouched && vp.last) { $("vpObserver").checked = !!vp.last.observer; dimObserver(); }
@@ -225,7 +230,66 @@
     const vp = (CW.state && CW.state.vpilot) || {};
     if (vp.connected) { if (confirm("Disconnect vPilot from VATSIM?")) CW.act("vp/disconnect", {}); return; }
     $("vpConnectForm").classList.toggle("hidden-block");
+    selcalCheck(0);
+    const sc = CW.state && CW.state.selcal;
+    if (!$("vpConnectForm").classList.contains("hidden-block") && sc && sc.simbrief_user && !sc.simbrief) refreshSb();
   };
+  // small availability line under the SELCAL field
+  let scTimer = null, scSeq = 0;
+  function selcalCheck(delay = 500) {
+    clearTimeout(scTimer);
+    const st = $("vpSelcalSt");
+    const code = $("vpSelcal").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (code.length < 4 || $("vpConnectForm").classList.contains("hidden-block")) { st.hidden = true; scSeq++; return; }
+    st.hidden = false;
+    st.className = "vp-sc-st";
+    st.innerHTML = '<span class="spin"></span>check. avail…';
+    const seq = ++scSeq;
+    scTimer = setTimeout(async () => {
+      try {
+        const d = await CW.api("selcal/check", { code, remember: false, exclude: $("vpCs").value });
+        if (seq !== scSeq) return;
+        const used = d.used_by;
+        if (used == null) { st.textContent = "not checked"; }
+        else if (!used.length) { st.className = "vp-sc-st free"; st.textContent = "avail."; }
+        else { st.className = "vp-sc-st taken"; st.textContent = `taken by ${used[0].callsign}${used.length > 1 ? ` +${used.length - 1}` : ""}`; }
+      } catch (e) {
+        if (seq === scSeq) { st.className = "vp-sc-st taken"; st.textContent = "invalid code"; }
+      }
+    }, delay);
+  }
+  $("vpSelcal").addEventListener("input", () => selcalCheck());
+
+  // "SB: CALLSIGN" from the latest SimBrief flight plan, to compare with what's typed
+  let sbBusy = false;
+  function renderSb() {
+    const s = CW.state, sc = s && s.selcal, sb = $("vpSb");
+    const ofp = sc && sc.simbrief, typed = $("vpCs").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    sb.className = "vp-sb";
+    if (sbBusy) return void (sb.textContent = "SB: fetching…");
+    if (!sc) return void (sb.textContent = "");
+    if (!sc.simbrief_user) return void (sb.textContent = "SB: set up in the SELCAL tab");
+    if (!ofp || !ofp.callsign) return void (sb.textContent = sc.simbrief_error ? `SB: ${sc.simbrief_error}` : "SB: –");
+    sb.innerHTML = `SB: <b>${esc(ofp.callsign)}</b>`;
+    if (typed) sb.classList.add(typed === ofp.callsign ? "match" : "differ");
+  }
+  async function refreshSb() {
+    const sc = CW.state && CW.state.selcal;
+    if (!sc || !sc.simbrief_user) { document.querySelector('.tab[data-view="selcal"]').click(); $("scSbUser").hidden = false; return; }
+    if (sbBusy) return;
+    sbBusy = true; $("vpSbRef").classList.add("spinning"); renderSb();
+    try { await CW.api("selcal/simbrief", {}); } catch (e) { toast(e.message, true); }
+    sbBusy = false; $("vpSbRef").classList.remove("spinning"); renderSb();
+  }
+  $("vpSbRef").onclick = refreshSb;
+  $("vpSb").onclick = () => {
+    const ofp = CW.state && CW.state.selcal && CW.state.selcal.simbrief;
+    if (!ofp || !ofp.callsign) return;
+    $("vpCs").value = ofp.callsign; renderSb(); selcalCheck(0);
+  };
+  $("vpCs").addEventListener("input", renderSb);
+  CW.onRender(renderSb);
+  window.CW.vpSelcalCheck = () => selcalCheck(0);
   $("vpConnectGo").onclick = () => CW.act("vp/connect", { callsign: $("vpCs").value, type_code: $("vpType").value, selcal: $("vpSelcal").value,
     observer: $("vpObserver").checked }, $("vpObserver").checked ? "Connecting as observer…" : "Connecting…");
   // an observer only needs a callsign

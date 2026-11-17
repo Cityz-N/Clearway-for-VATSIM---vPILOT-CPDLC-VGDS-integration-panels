@@ -290,7 +290,7 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 /* header tabs */
 .cw-tabs { display: flex; flex-grow: 1; }
 .cw-tab {
-  display: flex; align-items: center; padding: 0.35em 0.8em; margin-right: 0.3em; border-radius: 0.6em;
+  display: flex; align-items: center; padding: 0.35em 0.6em; margin-right: 0.15em; border-radius: 0.6em;
   font-weight: bold; font-size: 0.95em; color: var(--muted); cursor: pointer;
 }
 .cw-tab:hover { background-color: var(--surface-2); }
@@ -503,3 +503,111 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 #cw-debug { position: absolute; left: 50%; top: 1%; width: 34em; margin-left: -17em; padding: 0.6em 0.8em; border-radius: 0.6em;
   background-color: rgba(0, 0, 0, 0.82); color: #9df5c6; font-family: "Consolas", monospace; font-size: 0.85em; line-height: 1.3em;
   white-space: pre; pointer-events: none; z-index: 20; }
+
+/* ---------------- v0.9.5: SELCAL tab + flight plan warning ---------------- */
+.cw-tab[data-tab="selcal"].on { color: var(--lav); }
+.cw-fp-warn {
+  margin-left: 0.3em; padding: 0.2em 0.55em; border-radius: 0.5em;
+  background-color: var(--rose-soft); color: var(--rose); font-weight: bold; font-size: 0.78em; letter-spacing: 0.03em;
+}
+.cw-sc-feed { font-size: 0.75em; color: var(--muted); margin-right: 0.3em; }
+.cw-sc-feed.ok { color: var(--mint); }
+.cw-sc-feed.err { color: var(--rose); }
+.cw-sc-body { padding: 0.7em 0.8em 0.5em; }
+.cw-sc-sbuser { margin-bottom: 0.2em; }
+.cw-sc-ofp {
+  background-color: var(--surface); border: 1px solid var(--line); border-radius: 0.8em;
+  padding: 0.55em 0.75em; margin-bottom: 0.65em; font-size: 0.88em;
+}
+.cw-sc-ofp-top { display: flex; align-items: center; }
+.cw-sc-ofp-tag { font-size: 0.8em; font-weight: bold; letter-spacing: 0.05em; color: var(--lav); background-color: var(--lav-soft); padding: 0.1em 0.5em; border-radius: 1em; margin-right: 0.5em; }
+.cw-sc-ofp-cs { font-family: "Consolas", monospace; font-weight: bold; flex-grow: 1; }
+.cw-sc-ofp-route { font-family: "Consolas", monospace; color: var(--muted); font-size: 0.92em; }
+.cw-sc-ofp-code { display: flex; align-items: center; margin-top: 0.4em; }
+.cw-sc-ofp-code b { font-family: "Consolas", monospace; font-size: 1.35em; letter-spacing: 0.08em; margin-right: 0.6em; }
+.cw-sc-ofp-code .cw-sc-used { flex-grow: 1; margin: 0; }
+.cw-sc-ofp-code .cw-mini { margin-left: 0.4em; }
+.cw-sc-cs { display: flex; align-items: center; }
+.cw-sc-tile {
+  width: 3.3em; height: 2.35em; border-radius: 0.6em; margin-right: 0.5em; flex-shrink: 0;
+  background-color: var(--surface); border: 1px solid var(--line); overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-family: "Consolas", monospace; font-weight: bold; color: var(--muted); font-size: 0.9em;
+}
+.cw-sc-tile.logo { background-color: #ffffff; }
+.cw-sc-tile img { max-width: 92%; max-height: 86%; }
+.cw-sc-airline { font-size: 0.78em; color: var(--muted); margin: 0.3em 0 0 3.8em; min-height: 1em; }
+.cw-sc-codes { display: flex; margin: 0.55em 0 0.6em; }
+.cw-sc-code-box {
+  flex-grow: 1; width: 50%; background-color: var(--surface); border: 1px solid var(--line); border-radius: 0.8em;
+  padding: 0.5em 0.7em; margin-right: 0.5em;
+}
+.cw-sc-code-box.ext { margin-right: 0; }
+.cw-sc-label { font-size: 0.75em; font-weight: bold; color: var(--muted); letter-spacing: 0.03em; }
+.cw-sc-label span { font-weight: normal; opacity: 0.8; }
+.cw-sc-code { font-family: "Consolas", monospace; font-weight: bold; font-size: 1.75em; letter-spacing: 0.08em; margin: 0.12em 0; color: var(--text); }
+.cw-sc-code-box.ext .cw-sc-code { font-size: 1.4em; margin: 0.25em 0; }
+.cw-sc-used { font-size: 0.75em; color: var(--muted); min-height: 1.1em; }
+.cw-sc-used.free { color: var(--mint); }
+.cw-sc-used.taken { color: var(--rose); font-weight: bold; }
+.cw-sc-actions { margin-bottom: 0.3em; }
+.cw-sc-actions .cw-btn.primary { margin: 0 0.4em 0.3em 0; }
+.cw-sc-saved { max-height: 13em; padding-top: 0; }
+.cw-sc-row {
+  display: flex; align-items: center; padding: 0.45em 0.55em; margin-bottom: 0.4em;
+  background-color: var(--bg); border: 1px solid var(--line); border-radius: 0.7em;
+}
+.cw-sc-row .cw-sc-tile { width: 2.6em; height: 1.85em; font-size: 0.75em; }
+.cw-sc-who { flex-grow: 1; min-width: 0; }
+.cw-sc-who b { font-family: "Consolas", monospace; display: block; font-size: 0.92em; }
+.cw-sc-who span { font-size: 0.72em; color: var(--muted); }
+.cw-sc-rcodes { text-align: right; font-family: "Consolas", monospace; font-weight: bold; font-size: 0.92em; }
+.cw-sc-rcodes i { font-style: normal; font-size: 0.7em; color: var(--muted); margin-right: 0.35em; font-family: sans-serif; }.cw-sc-check { display: flex; align-items: center; margin-top: 0.5em; padding-top: 0.6em; border-top: 1px solid var(--line); }
+.cw-sc-check .cw-input { padding: 0.45em 0.65em; font-size: 0.92em; }
+.cw-sc-check .cw-btn { margin: 0 0 0 0.45em; }
+.cw-sc-check-res { display: flex; align-items: center; margin-top: 0.45em; }
+.cw-sc-check-res b { font-family: "Consolas", monospace; font-size: 1.2em; letter-spacing: 0.08em; margin-right: 0.6em; }
+.cw-sc-check-res .cw-sc-used { flex-grow: 1; }.cw-vp-sc-st { margin-left: auto; text-align: right; font-size: 0.72em; color: var(--muted); }
+.cw-vp-sc-st.free { color: var(--mint); font-weight: bold; }
+.cw-vp-sc-st.taken { color: var(--rose); font-weight: bold; }
+.cw-vp-sc-st.bad { color: var(--rose); }
+.cw-spin {
+  display: inline-block; width: 0.75em; height: 0.75em; margin: 0 0.35em -0.1em 0; border-radius: 50%;
+  border: 2px solid var(--muted); border-top-color: transparent; animation: cw-spin 0.8s linear infinite;
+}
+@keyframes cw-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }.cw-field { box-sizing: border-box; }
+
+/* ---------------- v0.9.6: pause panel notifications ---------------- */
+#cw-pause .cw-i-play { display: none; }
+#cw-pause.paused { background-color: var(--amber-soft); }
+#cw-pause.paused svg { stroke: var(--amber); }
+#cw-pause.paused .cw-i-pause { display: none; }
+#cw-pause.paused .cw-i-play { display: inline; fill: var(--amber); stroke-linejoin: round; }
+.cw-pause-mark {
+  display: none; position: absolute; right: -0.25em; bottom: -0.25em; width: 1.15em; height: 1.15em; border-radius: 50%;
+  background-color: var(--amber); border: 1px solid rgba(0, 0, 0, 0.25);
+}
+.cw-pause-mark:before, .cw-pause-mark:after {
+  content: ""; position: absolute; top: 0.3em; width: 0.14em; height: 0.55em; background-color: #2a1d07;
+}
+.cw-pause-mark:before { left: 0.38em; }
+.cw-pause-mark:after { right: 0.38em; }
+#cw-bubble.paused .cw-pause-mark { display: block; }#cw-bubble.paused.idle { opacity: 0.35; }
+/* four header buttons: keep them full size, take the room from the tabs */
+.cw-head { padding-left: 0.7em; padding-right: 0.6em; }
+.cw-head .cw-icon-btn { flex-shrink: 0; width: 1.85em; }
+.cw-tab { padding: 0.35em 0.45em; }
+.cw-clock { margin-right: 0.2em; padding: 0.2em 0.3em; flex-shrink: 0; }.cw-tab { padding: 0.35em 0.4em; font-size: 0.92em; margin-right: 0.1em; }
+.cw-head .cw-icon-btn { width: 1.75em; }
+.cw-tdot { margin-left: 0.3em; }#cw-card { width: 26.6em; }   /* room for three tabs, the clock and four buttons */
+
+/* ---------------- v0.9.6.1: SimBrief callsign under the connect form's callsign box ---------------- */
+.cw-vp-under { display: flex; align-items: center; min-height: 1.2em; margin: -0.2em 0.1em 0.45em 0.15em; }
+.cw-vp-sb { font-size: 0.72em; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.cw-vp-sb b { font-family: "Consolas", monospace; color: var(--text); }
+.cw-vp-sb.match b { color: var(--mint); }
+.cw-vp-sb.differ b { color: var(--amber); }
+.cw-vp-sb-ref { width: 1.15em; height: 1.15em; margin-left: 0.3em; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 0.3em; }
+.cw-vp-sb-ref:hover { background-color: var(--surface-2); }
+.cw-vp-sb-ref svg { width: 0.85em; height: 0.85em; stroke: var(--muted); stroke-width: 2.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.cw-vp-sb-ref.spinning svg { animation: cw-spin 0.8s linear infinite; }

@@ -97,6 +97,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "pair"}, 401)
             if (query.get("panel") or ["0"])[0] == "1":
                 self.session.panel_seen = time.time()
+                self.session.panel_paused = (query.get("paused") or ["0"])[0] == "1"
             since = (query.get("since") or ["0"])[0]
             if since.isdigit() and int(since) == self.session.version:
                 return self._json({"version": self.session.version, "unchanged": True,
@@ -111,6 +112,9 @@ class Handler(BaseHTTPRequestHandler):
             q = lambda k: (query.get(k) or [""])[0]  # noqa: E731
             items = self.session.vpilot_poll(q("connected") == "1", q("callsign"), q("cid"), q("observer") == "1")
             return self._json({"ok": True, "items": items})
+        if url.path == "/api/selcal/airlines":     # airline names and logos for the SELCAL tab
+            from .selcal import AIRLINES
+            return self._json({"ok": True, "airlines": AIRLINES})
         if url.path == "/api/keys":                 # MSFS panel: keys typed while it holds the keyboard
             if not self._is_local():
                 return self._json({"error": "only available on this PC"}, 403)
@@ -186,6 +190,21 @@ class Handler(BaseHTTPRequestHandler):
             elif action == "com":                  # COM radios from the MSFS panel
                 s.panel_seen = time.time()
                 s.set_com(body)
+            elif action == "selcal/generate":      # SELCAL tab
+                return self._json({"ok": True, "current": s.selcal_generate(str(body.get("callsign", ""))), "version": s.version})
+            elif action == "selcal/check":
+                return self._json({"ok": True, **s.selcal_check(str(body.get("code", "")), bool(body.get("remember", True)),
+                                                                str(body.get("exclude", "")))})
+            elif action == "selcal/save":
+                s.selcal_save(str(body.get("callsign", "")), int(body.get("generated") or 0),
+                              body.get("std"), body.get("ext"))
+            elif action == "selcal/remove":
+                s.selcal_remove(str(body.get("callsign", "")), int(body.get("generated") or 0))
+            elif action == "selcal/simbrief":
+                user = body.get("user")
+                return self._json({"ok": True, "ofp": s.simbrief_fetch(None if user is None else str(user)), "version": s.version})
+            elif action == "selcal/use":
+                return self._json({"ok": True, "code": s.selcal_use(str(body.get("code", ""))), "version": s.version})
             elif action == "notes":
                 s.save_notes(str(body.get("text", "")))
             elif action == "delete":

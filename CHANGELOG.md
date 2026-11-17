@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9.7
+
+- vPilot connect form: under the callsign box, **SB: CALLSIGN** shows the callsign of your latest SimBrief flight plan, to catch typos. It turns green when what you typed matches and amber when it doesn't; click it to use that callsign. The small refresh icon next to it fetches your latest SimBrief plan again (panel and phone)
+- The SimBrief plan is fetched automatically the first time you open the connect form (once your SimBrief username is set in the SELCAL tab)
+
+## 0.9.6
+
+- vPilot connect form: a small line under the SELCAL field checks the code on VATSIM as you type: "check. avail..." while checking, then **avail.** in green or **taken by CALLSIGN** in red (panel and phone)
+- MSFS panel: play/pause button in the top-right icons to pause panel notifications. While paused, the floating icon stays faint and quiet (no flashing, colour or counters) and shows a small pause mark; Clearway also stops muting your phone, so messages still reach you there. Click again to resume
+- MSFS panel: the card is slightly wider to fit the extra button
+
+## 0.9.5
+
+- New **SELCAL** tab (MSFS panel, phone and PC), merged from the SELCAL code generator: standard (16-tone) and extended (32-tone) codes, airline name and logo, save codes for 24 hours (up to 10 per callsign), shared between the panel, phone and PC
+- SELCAL: generated codes are checked against every flight plan on VATSIM (online and prefiled), so you never get a code someone else is using. Each code shows "Free on VATSIM" or who uses it
+- SELCAL: **SimBrief** button reads your latest SimBrief flight plan and shows its SELCAL, with the same VATSIM check (enter your SimBrief username or pilot ID once)
+- SELCAL: "Use in vPilot" puts the code in vPilot's connect form
+- SELCAL: "Check a code": type any code to see if it's valid and whether anyone on VATSIM uses it, then save it or use it in vPilot
+- SELCAL: the "Free / Used by" lines refresh by themselves whenever Clearway reads new VATSIM data (every minute while vPilot is connected)
+- vPilot: a bold **FP status** warning appears next to your callsign when you're connected but VATSIM has no flight plan filed for it (or only a prefile)
+
 ## 0.9.1
 
 - MSFS panel: fixed the card sometimes opening partly off screen (mostly with the icon near the bottom or top edge) until the icon was moved. The card now keeps itself on screen whenever its content or the window changes size
