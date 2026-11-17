@@ -888,7 +888,7 @@
     function scCheck() {
       var v = el("cw-sc-check-in").value.trim();
       if (!v) return;
-      act("selcal/check", { code: v }, "", "cw-sc-hint", function (ok, data) {
+      act("selcal/check", { code: v, exclude: scCallsign() }, "", "cw-sc-hint", function (ok, data) {
         if (ok) { el("cw-sc-check-in").value = data.code; releaseKeyboard(); }
         placeCard();
       });

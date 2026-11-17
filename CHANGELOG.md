@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.8
+
+- Fixed: fetching the SimBrief flight plan failed with "invalid literal for int()" (SimBrief now sends the plan's time as a date)
+- Fixed: your own flight plan or prefile no longer shows your SELCAL as "Used by" yourself (your vPilot callsign, your SimBrief callsign and the callsign in the SELCAL tab are ignored)
+- MSFS panel: the SimBrief username box keeps lower-case letters instead of showing everything in capitals
+
 ## 0.9.7
 
 - vPilot connect form: under the callsign box, **SB: CALLSIGN** shows the callsign of your latest SimBrief flight plan, to catch typos. It turns green when what you typed matches and amber when it doesn't; click it to use that callsign. The small refresh icon next to it fetches your latest SimBrief plan again (panel and phone)

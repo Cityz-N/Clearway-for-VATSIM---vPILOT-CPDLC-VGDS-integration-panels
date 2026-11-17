@@ -230,11 +230,24 @@ class SelcalMixin:
             self._bump()          # "Free / Used by" lines on every screen follow the new data
         return self._feed
 
-    def _used_by(self, code: str | None, exclude: str = "") -> list[dict] | None:
-        """Who else uses this code on VATSIM (online or prefiled). None = not checked."""
+    def _own_callsigns(self) -> set[str]:
+        """Callsigns that are you: your own prefile or flight plan never counts as 'used by'."""
+        own = {normalize_callsign(self.vpilot_callsign or ""), normalize_callsign(self.cfg.get("vpilot_callsign") or "")}
+        if self.simbrief:
+            own.add(self.simbrief.get("callsign", ""))
+        if self.selcal_current:
+            own.add(self.selcal_current.get("callsign", ""))
+        own.discard("")
+        return own
+
+    def _used_by(self, code: str | None, exclude="") -> list[dict] | None:
+        """Who else uses this code on VATSIM (online or prefiled). None = not checked.
+        `exclude`: a callsign or a set of callsigns that are you."""
         if not code or not self._feed:
             return None
-        return [u for u in self._feed["used"].get(code_key(code), []) if u["callsign"] != exclude]
+        skip = {exclude} if isinstance(exclude, str) else set(exclude)
+        skip |= self._own_callsigns()
+        return [u for u in self._feed["used"].get(code_key(code), []) if u["callsign"] not in skip]
 
     def selcal_generate(self, callsign: str) -> dict:
         cs = normalize_callsign(callsign)
@@ -265,7 +278,7 @@ class SelcalMixin:
         self._vatsim_feed()
         if remember:
             with self.lock:
-                self.selcal_checked = {"code": c, "ts": int(time.time() * 1000)}
+                self.selcal_checked = {"code": c, "ts": int(time.time() * 1000), "callsign": normalize_callsign(exclude)}
                 self._bump()
         return {"code": c, "used_by": self._used_by(c, normalize_callsign(exclude))}
 
@@ -306,7 +319,7 @@ class SelcalMixin:
             "arrival": str(g("destination", "icao_code") or ""),
             "aircraft": str(g("aircraft", "icaocode") or g("aircraft", "icao_code") or ""),
             "reg": str(g("aircraft", "reg") or ""),
-            "generated": int(str(g("params", "time_generated") or "0") or 0) * 1000,
+            "generated": _time_ms(g("params", "time_generated")),
             "fetched": int(time.time() * 1000),
         }
         self._vatsim_feed()
@@ -373,7 +386,7 @@ class SelcalMixin:
             saved.append(item)
         chk = dict(self.selcal_checked) if self.selcal_checked else None
         if chk:
-            chk["used_by"] = self._used_by(chk["code"])
+            chk["used_by"] = self._used_by(chk["code"], chk.get("callsign", ""))
         feed = self._feed
         return {
             "current": cur,
@@ -386,6 +399,18 @@ class SelcalMixin:
             "vatsim": {"checked": bool(feed), "age": int(time.time() - feed["ts"]) if feed else None,
                        "count": feed["count"] if feed else 0, "error": self._feed_error},
         }
+
+
+def _time_ms(value) -> int:
+    """SimBrief gives either a Unix time ('1794876345') or an ISO date ('2026-11-17T02:42:21Z')."""
+    s = str(value or "").strip()
+    if s.isdigit():
+        return int(s) * 1000
+    try:
+        from datetime import datetime
+        return int(datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp() * 1000)
+    except ValueError:
+        return 0
 
 
 def _dig(obj, *path):

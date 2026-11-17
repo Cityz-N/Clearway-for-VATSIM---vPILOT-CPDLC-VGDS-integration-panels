@@ -152,7 +152,7 @@
   async function check() {
     const v = $("scCheckIn").value.trim();
     if (!v) return;
-    try { const d = await CW.api("selcal/check", { code: v }); $("scCheckIn").value = d.code; }
+    try { const d = await CW.api("selcal/check", { code: v, exclude: callsign() }); $("scCheckIn").value = d.code; }
     catch (e) { CW.toast(e.message, true); }
   }
   $("scCheckGo").onclick = check;
