@@ -5,6 +5,7 @@
 - Fixed: fetching the SimBrief flight plan failed with "invalid literal for int()" (SimBrief now sends the plan's time as a date)
 - Fixed: your own flight plan or prefile no longer shows your SELCAL as "Used by" yourself (your vPilot callsign, your SimBrief callsign and the callsign in the SELCAL tab are ignored)
 - MSFS panel: the SimBrief username box keeps lower-case letters instead of showing everything in capitals
+- MSFS panel: your SimBrief username or pilot ID is shown in the SELCAL bar next to the SimBrief button; click it to change it (the box opens with the current one selected, Fetch saves the new one, click again to cancel)
 
 ## 0.9.7
 

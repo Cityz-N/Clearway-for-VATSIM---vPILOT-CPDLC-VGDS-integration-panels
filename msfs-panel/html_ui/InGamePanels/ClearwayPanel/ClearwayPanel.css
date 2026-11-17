@@ -611,3 +611,9 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 .cw-vp-sb-ref:hover { background-color: var(--surface-2); }
 .cw-vp-sb-ref svg { width: 0.85em; height: 0.85em; stroke: var(--muted); stroke-width: 2.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .cw-vp-sb-ref.spinning svg { animation: cw-spin 0.8s linear infinite; }#cw-sc-sbuser-in { text-transform: none; }   /* SimBrief usernames keep their case */
+.cw-sc-sbname {
+  font-family: "Consolas", monospace; font-size: 0.75em; color: var(--muted); cursor: pointer;
+  padding: 0.15em 0.4em; border-radius: 0.4em; border: 1px dashed var(--line); margin-right: 0.15em;
+  max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cw-sc-sbname:hover, .cw-sc-sbname.on { color: var(--text); border-color: var(--muted); }

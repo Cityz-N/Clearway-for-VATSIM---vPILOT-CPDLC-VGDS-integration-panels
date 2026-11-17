@@ -716,9 +716,14 @@
     var feed = el("cw-sc-feed");
     if (!sc) { feed.textContent = reachable ? "" : "Clearway not running"; feed.className = "cw-sc-feed err"; return; }
     var v = sc.vatsim || {};
-    feed.textContent = v.checked ? "VATSIM: " + v.count + " flight plans" : (v.error || "VATSIM not checked yet");
+    feed.textContent = v.checked ? "VATSIM " + v.count : (v.error || "VATSIM not checked yet");
+    feed.title = v.checked ? v.count + " VATSIM flight plans checked" : "";
     feed.className = "cw-sc-feed" + (v.checked ? " ok" : v.error ? " err" : "");
-    // SimBrief
+    // SimBrief: the saved username sits in the bar; click it to change it
+    var name = el("cw-sc-sbname");
+    name.textContent = sc.simbrief_user || "";
+    name.classList.toggle("hidden", !sc.simbrief_user);
+    name.classList.toggle("on", scUserOpen);
     el("cw-sc-sbuser").classList.toggle("hidden", !scUserOpen);
     prefillInput("cw-sc-sbuser-in", sc.simbrief_user);
     var ofp = sc.simbrief, box = el("cw-sc-ofp");
@@ -866,6 +871,16 @@
       var sc = state && state.selcal;
       if (sc && sc.simbrief_user && !scUserOpen) scFetchSimbrief();
       else { scUserOpen = !scUserOpen || !(sc && sc.simbrief_user); renderSelcal(); placeCard(); if (scUserOpen) el("cw-sc-sbuser-in").focus(); }
+    });
+    el("cw-sc-sbname").addEventListener("click", function () {
+      var sc = state && state.selcal;
+      scUserOpen = !scUserOpen;
+      if (scUserOpen) {
+        el("cw-sc-sbuser-in").value = (sc && sc.simbrief_user) || "";   // start from the current one
+        renderSelcal(); placeCard();
+        el("cw-sc-sbuser-in").focus();
+        el("cw-sc-sbuser-in").select();
+      } else { releaseKeyboard(); renderSelcal(); placeCard(); }
     });
     el("cw-sc-gen").addEventListener("click", scGenerate);
     el("cw-sc-save").addEventListener("click", function () {
