@@ -5,6 +5,7 @@
   <meta charset="utf-8"/>
   <link rel="stylesheet" href="/SCSS/common.css"/>
   <link rel="stylesheet" href="ClearwayPanel.css"/>
+  <link rel="stylesheet" href="radar.css"/>
   <script type="text/javascript" src="/JS/coherent.js"></script>
   <script type="text/javascript" src="/JS/common.js"></script>
   <script type="text/javascript" src="/JS/dataStorage.js"></script>
@@ -30,6 +31,18 @@
           <span class="cw-pause-mark"></span>
         </div>
 
+        <!-- detached radar window: move by its title bar, resize from the corner; stays open with the card closed -->
+        <div id="cw-radar-win" class="hidden">
+          <div class="cw-rw-head" id="cw-rw-head">
+            <span class="cw-rw-title">Radar</span>
+            <div class="cw-icon-btn" id="cw-rw-dock" title="Put the radar back in the Clearway card">
+              <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 14h16"/></svg>
+            </div>
+          </div>
+          <div id="cw-rw-body"></div>
+          <div id="cw-rw-grip" title="Resize"></div>
+        </div>
+
         <!-- right click on the icon: peek at the latest message -->
         <div id="cw-peek" class="hidden"></div>
 
@@ -40,6 +53,7 @@
               <div class="cw-tab" data-tab="vpilot">vPilot<span class="cw-tdot vp hidden" id="cw-tdot-vp"></span></div>
               <div class="cw-tab" data-tab="cpdlc">CPDLC<span class="cw-tdot cp hidden" id="cw-tdot-cp"></span></div>
               <div class="cw-tab" data-tab="selcal">SELCAL</div>
+              <div class="cw-tab" data-tab="radar">Radar</div>
             </div>
             <span class="cw-clock utc" id="cw-clock" title="Click: UTC / sim time / local time">--:--:--z</span>
             <div class="cw-icon-btn" id="cw-pause" title="Pause panel notifications">
@@ -188,6 +202,16 @@
             </div>
           </div>
 
+          <!-- ======================= Radar ======================= -->
+          <!-- radar.js builds the radar inside #cw-radar-dock; the detach button moves it to #cw-rw-body -->
+          <div id="cw-pane-radar" class="hidden">
+            <div id="cw-radar-dock"></div>
+            <div id="cw-radar-away" class="hidden">
+              <div class="cw-empty">The radar is open in its own window.</div>
+              <div class="cw-btn full" id="cw-radar-back">Put it back here</div>
+            </div>
+          </div>
+
           <!-- ======================= notepad ======================= -->
           <div id="cw-notes" class="hidden">
             <textarea id="cw-notes-text" class="cw-notes" placeholder="Notes: frequencies, clearances, squawk codes…"></textarea>
@@ -197,6 +221,8 @@
       </div>
     </ingame-ui>
   </ingamepanel-clearway>
+  <!-- radar.js / radar.css are copied from companion/web/radar by tools/build_panel.py -->
+  <script type="text/javascript" src="radar.js"></script>
   <script type="text/javascript" src="ClearwayPanel.js"></script>
 </body>
 </html>

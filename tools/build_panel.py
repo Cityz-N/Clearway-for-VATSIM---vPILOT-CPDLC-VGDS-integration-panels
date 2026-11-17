@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PANEL = ROOT / "msfs-panel"
 DIST = ROOT / "dist" / "clearway-panel"
 PACKAGE_NAME = "clearway-panel"
-VERSION = "0.9.8"
+VERSION = "1.0.0"
 # MSFS package manifests use X.Y.Z; a fourth part (hotfix) is dropped there
 MANIFEST_VERSION = ".".join(VERSION.split(".")[:3])
 
@@ -60,6 +60,14 @@ def compile_spb() -> Path:
     cache.mkdir(exist_ok=True)
     shutil.copy2(spbs[0], cache / "clearway-panel.spb")
     return cache / "clearway-panel.spb"
+
+
+def sync_radar() -> None:
+    """The radar's code has one source, companion/web/radar (also used by its browser test page)."""
+    src = ROOT / "companion" / "web" / "radar"
+    dst = PANEL / "html_ui" / "InGamePanels" / "ClearwayPanel"
+    for name in ("radar.js", "radar.css"):
+        shutil.copy2(src / name, dst / name)
 
 
 def win_filetime(path: Path) -> int:
@@ -121,6 +129,7 @@ def main() -> None:
     ap.add_argument("--assemble", action="store_true", help="re-use msfs-panel/compiled/clearway-panel.spb")
     args = ap.parse_args()
 
+    sync_radar()
     spb = PANEL / "compiled" / "clearway-panel.spb"
     if args.assemble and not spb.exists():
         # pick up a build made in the sim (Dev Mode > Project Editor > Build All)

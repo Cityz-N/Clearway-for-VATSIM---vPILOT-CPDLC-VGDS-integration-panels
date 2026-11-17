@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clearway Radar (test)</title>
+<link rel="stylesheet" href="radar.css">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e13; }
+</style>
+</head>
+<body>
+<!-- Browser test page for the radar (the real one lives in the MSFS panel's Radar tab).
+     Options: ?perf=1 performance readout, ?me=CALLSIGN fake your aircraft, ?ui=1.33 fake the sim's scale. -->
+<script src="radar.js"></script>
+<script>
+  ClearwayRadar.mount({ api: "", container: document.body, onDetach: function () { alert("Detach is handled by the Clearway panel."); } });
+</script>
+</body>
+</html>

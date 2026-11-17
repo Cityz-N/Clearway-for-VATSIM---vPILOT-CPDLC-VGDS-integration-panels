@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 960px; height: 540px; overflow: hidden; font-family: "Segoe UI Variable", "Segoe UI", sans-serif; }
+  body {
+    position: relative;
+    background: radial-gradient(ellipse 70% 60% at 50% 115%, rgba(127, 207, 159, .18), transparent 60%),
+                linear-gradient(160deg, #16233a 0%, #0c111b 100%);
+  }
+  .title { position: absolute; left: 0; right: 0; top: 14px; text-align: center; color: #fff; font-size: 17px; font-weight: 600; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+  .title span { color: #7fcf9f; }
+  .title small { display: block; font-size: 12.5px; font-weight: 400; opacity: .85; margin-top: 3px; }
+  /* radar card: 667x353 at (85,270) in the 1000x1080 panel; scale 1.27 -> 847x448 at (56,66) */
+  .panel { position: absolute; left: -52px; top: -277px; width: 1000px; height: 1080px; border: 0; transform: scale(1.27); transform-origin: 0 0; }
+</style>
+</head>
+<body>
+  <div class="title"><span>Radar</span> in the MSFS panel<small>Live VATSIM traffic with callsign, type and destination. Click a plane for its full tag. Detach it into its own window</small></div>
+  <iframe class="panel" src="http://localhost:8791/html_ui/InGamePanels/ClearwayPanel/ClearwayPanel.html?api=http://localhost:8797&open=radar"></iframe>
+</body>
+</html>

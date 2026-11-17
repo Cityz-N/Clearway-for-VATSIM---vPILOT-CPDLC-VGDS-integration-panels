@@ -1,43 +1,25 @@
-# Clearway
+# Clearway for VATSIM
 
-**CPDLC and vPilot for VATSIM on your phone and inside Microsoft Flight Simulator.** Free, no accounts, no Mac needed.
+**vPilot, CPDLC, SELCAL and a live radar, inside MSFS and on your phone.** Free, no accounts, nothing to pay.
 
-Clearway is a small companion program for Windows that connects to the [Hoppie ACARS](https://www.hoppie.nl/acars/) network. It lets you read and answer CPDLC messages from:
+A small Windows companion app feeds an in-game MSFS toolbar panel (a floating icon you put anywhere) and a phone web app (iPhone or Android). Both stay in sync.
 
-- 📱 **your phone** (iPhone or Android): a clean web app on your home screen, plus lock-screen notifications through the free [ntfy](https://ntfy.sh) app
-- ✈️ **an in-game MSFS toolbar panel**: a small floating icon you can put anywhere on screen. It flashes when a message arrives and stays amber until you answer.
-
-You can use both at the same time; they stay in sync.
-
-<p align="center">
-  <img src="docs/phones.png" width="640" alt="Clearway on a phone: vPilot tab and CPDLC tab">
-</p>
-<p align="center">
-  <img src="docs/panel-vpilot.png" width="400" alt="MSFS panel, vPilot tab">
-  &nbsp;
-  <img src="docs/panel-cpdlc.png" width="400" alt="MSFS panel, CPDLC tab">
-</p>
+<p align="center"><img src="docs/fs-hero.png" width="820" alt="Clearway in MSFS and on the phone"></p>
+<p align="center"><img src="docs/clearway-demo.webp" width="820" alt="Animation: SELCAL, CPDLC clearance, vPilot chat, CPDLC answer from the peek window, Radar"></p>
+<p align="center"><img src="docs/fs-panels.png" width="820" alt="MSFS panel: CPDLC, vPilot and SELCAL tabs"></p>
+<p align="center"><img src="docs/fs-radar.png" width="820" alt="MSFS panel: Radar tab"></p>
+<p align="center"><img src="docs/fs-phones.png" width="820" alt="Phone: vPilot, CPDLC and SELCAL tabs"></p>
 
 ## Features
 
-- CPDLC logon and logoff, automatic handover to the next station
-- One-tap answers: **WILCO / UNABLE / STANDBY**, **AFFIRM / NEGATIVE**, **ROGER**, or free text
-- Requests: level, direct to, speed, "when can we expect…", free text
-- Pre-departure clearance (PDC/DCL), oceanic clearance request and telex, from the phone and the MSFS panel
-- METAR, TAF and VATSIM ATIS lookups
-- Automatic ADS-C position reports, using the sim's position when the panel is open and VATSIM data otherwise
-- Phone notifications with quick-reply buttons
-- Optionally mutes phone notifications while the MSFS panel is open
-- Callsign and flight plan read automatically from VATSIM using your CID
-- Collapse messages to one line, delete them, and restore deleted ones (until Clearway quits)
-- Dark theme by default, with a light theme in Settings that also applies to the MSFS panel
-- Runs quietly as a tray icon with no console window
-- **vPilot tab** (with the vPilot plugin): frequency chat plus one tab per private chat, nearby controllers (tap the arrow for their information), connect/disconnect, Mode C/standby, ident, and vPilot's dot commands. Clearway also connects to Hoppie automatically as soon as vPilot connects.
-- Tabs everywhere: **vPilot**, **CPDLC** and **SELCAL**. Unread counters are cyan for vPilot and amber for CPDLC, on the tabs and on the panel's floating icon.
-- **SELCAL tab**: generates standard and extended SELCAL codes that no one on VATSIM is using or has prefiled, reads the SELCAL of your latest SimBrief flight plan and checks it the same way, saves codes for 24 hours, and can put the code in vPilot's connect form
-- **FP status** warning in the vPilot tab when you're connected but VATSIM has no flight plan filed for your callsign
-- Notepad shared between the phone, the PC page and the MSFS panel
-- VDGS shortcut on the phone: opens the official VDGS page ([vats.im/vdgs](https://vats.im/vdgs)) for your TOBT, TSAT and start-up window
+| | |
+|---|---|
+| **vPilot** | Frequency and private chats, nearby ATC and ATIS, connect or observe, transponder, dot commands. Warns when your flight plan isn't filed |
+| **CPDLC** (Hoppie) | Logon, departure and oceanic clearances, requests, one-tap WILCO / UNABLE, automatic ADS-C |
+| **SELCAL** | Codes no one on VATSIM is using, SimBrief import, check any code |
+| **Radar** (MSFS panel) | Live VATSIM traffic, controllers and sectors, airport info. Detach it into its own window |
+
+**Also:** phone notifications with quick replies (free ntfy app) · right-click the panel icon to peek and reply · typing in the panel never triggers sim or ChasePlane shortcuts · shared notepad · METAR, TAF and ATIS · light or dark theme · runs as a small tray app
 
 ## How it works
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0
+
+- New **Radar** tab in the MSFS panel: live VATSIM traffic on a dark map. Planes show their callsign and type with the destination underneath; click one for the full tag (frequency it's tuned to, altitude, speed) and its details. Planes on the ground appear when zoomed in to airport level
+- Radar: online controllers with their sectors from VATGlasses (coloured areas with callsign and frequency), airport badges for Delivery / Ground / Tower / Approach / ATIS, and approach circles where VATGlasses has no data. Click a sector or airport for the controllers, frequencies and ATIS
+- Radar: airports with arriving traffic show as small dots; click an airport for red departure and green arrival lines (each can be switched off)
+- Radar: your own aircraft is green when you're connected (Clearway knows your callsign from the vPilot plugin), or a hollow green outline at your sim position when you're offline or an observer. TRK keeps it in the centre
+- Radar: on the Radar tab the card is twice as wide. The detach button opens the radar in its own window that you can move and resize (it stays open when the card is closed); dock it back with the button in its title bar or "Put it back here" in the tab
+- Radar: buttons for labels, ATC, ground traffic and display size (AUTO / 1080 / 1440 / 4K)
+- Radar: nothing is downloaded or drawn while the radar is hidden; its data (about 120 MB of memory) only loads the first time you open it. Map: Esri World Dark Gray Canvas; sectors: VATGlasses (CC BY-NC-SA 4.0); airports: VATSpy data project (CC BY-SA 4.0)
+- MSFS panel: the card is a little wider so its header fits all four tabs, the clock and the buttons (with four tabs the notepad and collapse buttons were cut off)
+
 ## 0.9.8
 
 - Fixed: fetching the SimBrief flight plan failed with "invalid literal for int()" (SimBrief now sends the plan's time as a date)

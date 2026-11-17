@@ -31,7 +31,7 @@ VERSION = re.search(r'__version__ = "([^"]+)"', (ROOT / "companion" / "clearway"
 
 README = f"""CLEARWAY FOR VATSIM  {VERSION}
 CPDLC (Hoppie) and vPilot on your phone (iPhone or Android) and in an MSFS toolbar panel. Free, no accounts.
-Full guide, source code and updates: https://github.com/Cityz-N/Clearway-for-VATSIM---vPILOT-CPDLC-VGDS-integration-panels
+Full guide, source code and updates: https://github.com/Cityz-N/Clearway-for-VATSIM---vPILOT-and-CPDLC-RADAR-integration-for-MSFS
 
 QUICK START
 1. You already did step 1 if you're reading this inside your Community folder:

@@ -10,6 +10,7 @@ Needs Pillow + websocket-client (build\\venv\\Scripts\\pip install pillow websoc
 """
 import base64
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -77,6 +78,29 @@ def prepare():
     call("ack", {})
 
 
+def radar_view():
+    """Load the radar data, then centre the view on the busiest airborne traffic (labels readable after one
+    zoom-in in the demo). Returns "x,y,z" for flight.html's ?rv= parameter."""
+    for _ in range(90):
+        t = call("radar/traffic")
+        if t.get("pilots"):
+            break
+        time.sleep(1)
+    else:
+        sys.exit("Radar data didn't load")
+    call("radar/atc")
+    pilots, best, plane = t["pilots"], -1, None      # [cs, lat, lon, alt, gs, ...]
+    for p in pilots:
+        if 4000 <= p[3] <= 24000 and p[4] > 150:
+            n = sum(1 for q in pilots if abs(q[1] - p[1]) < 0.9 and abs(q[2] - p[2]) < 1.4)
+            if n > best:
+                best, plane = n, p
+    s = math.sin(math.radians(plane[1]))
+    x, y = (plane[2] + 180) / 360, 0.5 - math.log((1 + s) / (1 - s)) / (4 * math.pi)
+    print(f"radar centred near {plane[0]} ({best} planes around)")
+    return f"{x:.6f},{y:.6f},7.4"
+
+
 class Cdp:
     def __init__(self, ws_url):
         self.ws = websocket.create_connection(ws_url, timeout=30, suppress_origin=True)
@@ -104,7 +128,7 @@ def edge_path():
     sys.exit("Microsoft Edge not found")
 
 
-def record():
+def record(rv):
     shutil.rmtree(FRAMES, ignore_errors=True)
     FRAMES.mkdir(parents=True)
     profile = tempfile.mkdtemp(prefix="cw-demo-")
@@ -124,7 +148,7 @@ def record():
         cdp = Cdp(page["webSocketDebuggerUrl"])
         cdp("Emulation.setDeviceMetricsOverride", width=1920, height=1080, deviceScaleFactor=1.5625, mobile=False)
         cdp("Page.enable")
-        cdp("Page.navigate", url=f"http://127.0.0.1:{PORT}/")
+        cdp("Page.navigate", url=f"http://127.0.0.1:{PORT}/?rv={rv}")
         for _ in range(200):
             if cdp.js("window.__ready === true"):
                 break
@@ -141,7 +165,7 @@ def record():
             frames.append((path, t))
             if len(frames) % 8 == 0 and cdp.js("window.__done === true"):
                 break
-            if t > 180:
+            if t > 240:
                 break
         err = cdp.js("window.__error || ''")
         if err:
@@ -182,7 +206,7 @@ def main():
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     prepare()
-    frames = record()
+    frames = record(radar_view())
     server.shutdown()
     if "--no-encode" not in sys.argv:
         print("Saved", encode(frames))

@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / ".dev-data"
 DATA.mkdir(exist_ok=True)
 os.environ["CLEARWAY_DATA_DIR"] = str(DATA)
+# The test Clearway never holds the real keyboard (a panel field focused in a browser would otherwise make it
+# swallow keys typed into a running MSFS). Set CLEARWAY_KEY_TARGETS yourself to test the keyboard hook.
+os.environ.setdefault("CLEARWAY_KEY_TARGETS", "no-such-program-dev-run.exe")
 
 cfg_file = DATA / "config.json"
 cfg = json.loads(cfg_file.read_text()) if cfg_file.exists() else {}

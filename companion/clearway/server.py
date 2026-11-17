@@ -1,6 +1,7 @@
 """Local HTTP server: serves the web app and the JSON API used by the phone and the MSFS panel."""
 from __future__ import annotations
 
+import gzip
 import ipaddress
 import json
 import logging
@@ -13,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .keyhook import KeyCapture
+from .radar import Radar
 from .session import Session
 
 log = logging.getLogger("clearway.server")
@@ -39,6 +41,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "Clearway"
     session: Session = None  # set by make_server
     keys: KeyCapture = None
+    radar: Radar = None
 
     # Keep the console clean; errors still go to the log file.
     def log_message(self, fmt, *args):
@@ -68,6 +71,21 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _raw(self, status: int, body: bytes, ctype: str, cache: str):
+        """Pre-encoded radar data and map tiles (large JSON is gzipped when the client accepts it)."""
+        gz = ctype == "application/json" and len(body) > 2048 and "gzip" in (self.headers.get("Accept-Encoding") or "")
+        if gz:
+            body = gzip.compress(body, 5)
+        self.send_response(status)
+        self.send_header("Content-Type", ctype + ("; charset=utf-8" if ctype == "application/json" else ""))
+        self.send_header("Cache-Control", cache)
+        self.send_header("Content-Length", str(len(body)))
+        if gz:
+            self.send_header("Content-Encoding", "gzip")
         self._cors()
         self.end_headers()
         self.wfile.write(body)
@@ -115,6 +133,15 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/api/selcal/airlines":     # airline names and logos for the SELCAL tab
             from .selcal import AIRLINES
             return self._json({"ok": True, "airlines": AIRLINES})
+        if url.path.startswith("/api/radar/"):      # Radar tab (panel) - see radar.py
+            if not self._authorized(query):
+                return self._json({"error": "pair"}, 401)
+            try:
+                status, body, ctype, cache = self.radar.handle(url.path[len("/api/radar/"):], query)
+            except Exception as exc:
+                log.debug("radar request failed: %s", exc)
+                return self._json({"error": str(exc)}, 502)
+            return self._raw(status, body, ctype, cache)
         if url.path == "/api/keys":                 # MSFS panel: keys typed while it holds the keyboard
             if not self._is_local():
                 return self._json({"error": "only available on this PC"}, 403)
@@ -267,6 +294,7 @@ class Handler(BaseHTTPRequestHandler):
 def make_server(session: Session, port: int) -> ThreadingHTTPServer:
     Handler.session = session
     Handler.keys = KeyCapture(enabled=lambda: session.cfg.get("panel_capture_keys"))
+    Handler.radar = Radar(session)
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     server.daemon_threads = True
     return server

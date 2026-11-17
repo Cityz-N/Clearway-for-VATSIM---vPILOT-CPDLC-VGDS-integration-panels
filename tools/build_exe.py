@@ -40,7 +40,7 @@ VSVersionInfo(
       StringStruct('FileDescription', 'Clearway - CPDLC and vPilot companion for VATSIM'),
       StringStruct('FileVersion', '{VERSION}'),
       StringStruct('InternalName', 'Clearway'),
-      StringStruct('LegalCopyright', 'MIT License - https://github.com/Cityz-N/Clearway-for-VATSIM---vPILOT-CPDLC-VGDS-integration-panels'),
+      StringStruct('LegalCopyright', 'MIT License - https://github.com/Cityz-N/Clearway-for-VATSIM---vPILOT-and-CPDLC-RADAR-integration-for-MSFS'),
       StringStruct('OriginalFilename', 'Clearway.exe'),
       StringStruct('ProductName', 'Clearway for VATSIM'),
       StringStruct('ProductVersion', '{VERSION}')])]),

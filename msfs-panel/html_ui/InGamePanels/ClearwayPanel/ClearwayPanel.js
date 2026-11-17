@@ -248,6 +248,9 @@
     el("cw-pane-vpilot").classList.toggle("hidden", t !== "vpilot" || notesOpen);
     el("cw-pane-cpdlc").classList.toggle("hidden", t !== "cpdlc" || notesOpen);
     el("cw-pane-selcal").classList.toggle("hidden", t !== "selcal" || notesOpen);
+    el("cw-pane-radar").classList.toggle("hidden", t !== "radar" || notesOpen);
+    // Radar tab: twice as wide, unless the radar is in its own window (then a short note is shown)
+    el("cw-card").classList.toggle("radar", t === "radar" && !notesOpen && !radarDetached);
     el("cw-notes").classList.toggle("hidden", !notesOpen);
     el("cw-notes-btn").classList.toggle("on", notesOpen);
     lastChatKey = "";
@@ -939,6 +942,7 @@
     el("cw-root").style.fontSize = (12.5 * scale) + "px";
     var pos = load("CLEARWAY_POS", null) || { x: 0.03, y: 0.25 };
     placeBubble(pos.x * window.innerWidth, pos.y * window.innerHeight, false);
+    if (radarDetached) placeRadarWindow(load("CLEARWAY_RADAR_WIN", null));
   }
 
   function placeBubble(x, y, persist) {
@@ -1124,6 +1128,84 @@
     var btn = el("cw-lock");
     btn.classList.toggle("on", !!placementLock);
     btn.title = placementLock ? "Card direction locked (click to unlock)" : "Lock where the card opens";
+  }
+
+  // ------------------------------------------------------------ Radar tab / detached radar window
+  // The radar (radar.js) lives in the card's Radar tab. Its detach button moves the same element into a
+  // separate window over the screen that can be moved and resized and stays open while the card is closed;
+  // the dock button (or "Put it back here" in the tab) returns it. The radar pauses by itself whenever it
+  // is not visible (other tab, card closed), so nothing is downloaded or drawn then.
+  var radarDetached = false;
+  function startRadar() {
+    if (typeof ClearwayRadar === "undefined") return;
+    ClearwayRadar.mount({ api: API, container: el("cw-radar-dock"), capture: el("cw-capture"), onDetach: toggleRadarWindow });
+    var w = el("cw-radar-win");
+    makeWindowDraggable(el("cw-rw-head"), w);
+    makeWindowResizable(el("cw-rw-grip"), w);
+    el("cw-rw-dock").addEventListener("click", function () { setRadarDetached(false); });
+    el("cw-radar-back").addEventListener("click", function () { setRadarDetached(false); });
+    setRadarDetached(!!load("CLEARWAY_RADAR_DETACHED", false));
+  }
+  function toggleRadarWindow() { setRadarDetached(!radarDetached); }
+  function setRadarDetached(on) {
+    var r = document.getElementById("rd-radar");
+    if (!r) return;
+    radarDetached = on;
+    save("CLEARWAY_RADAR_DETACHED", on);
+    (on ? el("cw-rw-body") : el("cw-radar-dock")).appendChild(r);   // the radar's listeners move with it
+    r.classList.toggle("detached", on);
+    var d = document.getElementById("rd-detach");
+    if (d) d.title = on ? "Put the radar back in the Clearway card" : "Open the radar in its own window";
+    el("cw-radar-win").classList.toggle("hidden", !on);
+    el("cw-radar-dock").classList.toggle("hidden", on);
+    el("cw-radar-away").classList.toggle("hidden", !on);
+    if (on) placeRadarWindow(load("CLEARWAY_RADAR_WIN", null));
+    showTab(tab);
+  }
+  // saved as fractions of the screen so it survives resolution / window changes
+  function placeRadarWindow(g) {
+    var w = el("cw-radar-win"), sw = window.innerWidth, sh = window.innerHeight;
+    g = g || { x: 0.25, y: 0.2, w: 0.45, h: 0.5 };
+    var ww = Math.max(18 * 12.5 * scale, Math.min(sw - 8, g.w * sw)), wh = Math.max(12 * 12.5 * scale, Math.min(sh - 8, g.h * sh));
+    var x = Math.max(4, Math.min(sw - ww - 4, g.x * sw)), y = Math.max(4, Math.min(sh - wh - 4, g.y * sh));
+    w.style.left = x + "px"; w.style.top = y + "px"; w.style.width = ww + "px"; w.style.height = wh + "px";
+  }
+  function saveRadarWindow() {
+    var w = el("cw-radar-win"), sw = window.innerWidth || 1, sh = window.innerHeight || 1;
+    save("CLEARWAY_RADAR_WIN", { x: w.offsetLeft / sw, y: w.offsetTop / sh, w: w.offsetWidth / sw, h: w.offsetHeight / sh });
+  }
+  // drag helpers for the radar window: the capture layer keeps the drag going outside the window
+  function windowDrag(handle, onMove, skip) {
+    handle.addEventListener("mousedown", function (e) {
+      if (e.button !== 0 || (skip && skip(e))) return;
+      var sx = e.clientX, sy = e.clientY, cap = el("cw-capture"), w = el("cw-radar-win");
+      var o = { x: w.offsetLeft, y: w.offsetTop, w: w.offsetWidth, h: w.offsetHeight };
+      cap.classList.add("on");
+      function move(ev) { onMove(o, ev.clientX - sx, ev.clientY - sy); }
+      function upHandler() {
+        cap.classList.remove("on");
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", upHandler);
+        saveRadarWindow();
+      }
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", upHandler);
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+  function makeWindowDraggable(handle, w) {
+    windowDrag(handle, function (o, dx, dy) {
+      w.style.left = Math.max(4, Math.min(window.innerWidth - o.w - 4, o.x + dx)) + "px";
+      w.style.top = Math.max(4, Math.min(window.innerHeight - o.h - 4, o.y + dy)) + "px";
+    }, function (e) { return !!up(e.target, ".cw-icon-btn"); });
+  }
+  function makeWindowResizable(grip, w) {
+    windowDrag(grip, function (o, dx, dy) {
+      var minW = 18 * 12.5 * scale, minH = 12 * 12.5 * scale;
+      w.style.width = Math.max(minW, Math.min(window.innerWidth - o.x - 4, o.w + dx)) + "px";
+      w.style.height = Math.max(minH, Math.min(window.innerHeight - o.y - 4, o.h + dy)) + "px";
+    });
   }
 
   // ------------------------------------------------------------ clock: UTC / sim time / local
@@ -1631,7 +1713,8 @@
     el("cw-req-chev").classList.toggle("closed", !reqOpen);
     setReqKind("logon");
     // ?open=vpilot|cpdlc opens the card on that tab (used to take documentation screenshots in a browser)
-    var openParam = /[?&]open=(vpilot|cpdlc|selcal)/.exec(window.location.search || "");
+    var openParam = /[?&]open=(vpilot|cpdlc|selcal|radar)/.exec(window.location.search || "");
+    startRadar();
     showTab(openParam ? openParam[1] : load("CLEARWAY_TAB", "vpilot"));
     setExpanded(openParam ? true : load("CLEARWAY_EXPANDED", false));
     // ?atc=CALLSIGN opens Nearby ATC with that controller expanded (documentation screenshots)
