@@ -34,16 +34,42 @@ Only the companion talks to Hoppie, so the phone and the panel never compete for
 
 ## Setup
 
-### 1. The companion (Windows)
+Download **`Clearway-for-VATSIM-<version>.zip`** from the [Releases](../../releases) page (or flightsim.to). It contains everything: the MSFS panel, the Clearway companion app and the vPilot plugin.
 
-1. Download **`Clearway-for-VATSIM-<version>.zip`** from the [Releases](../../releases) page and extract it into your MSFS **Community** folder. Then run `Clearway companion\Clearway.exe` inside it (keep the `_internal` folder next to it). Not using MSFS? Just take the `Clearway companion` folder out of the zip and put it anywhere (on GitHub releases there's also a separate `Clearway-companion.zip`). There is no window: Clearway runs as an icon in the notification area next to the clock. **Double-click** the icon to open it; **right-click** it to connect, disconnect or quit. Keep it running while you fly.
-2. Windows Firewall will ask about network access. Allow **Private networks**, so your phone can reach it.
-3. The first time, your browser opens on `http://localhost:8787` (later, double-click the tray icon). Go to **Settings** and enter:
-   - your **Hoppie logon code** (get one free at [hoppie.nl/acars](https://www.hoppie.nl/acars/system/register.html))
+### 1. The MSFS panel
+
+1. Extract the zip into your MSFS **Community** folder. You get a `clearway-panel` folder there.
+   - MSFS 2020, MS Store / Xbox app: `%LOCALAPPDATA%\Packages\Microsoft.FlightSimulator_8wekyb3d8bbwe\LocalCache\Packages\Community`
+   - MSFS 2020, Steam: `%APPDATA%\Microsoft Flight Simulator\Packages\Community`
+   - MSFS 2024, MS Store / Xbox app: `%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community`
+   - MSFS 2024, Steam: `%APPDATA%\Microsoft Flight Simulator 2024\Packages\Community`
+   - Custom location: check `InstalledPackagesPath` in `UserCfg.opt`
+
+### 2. The companion (Windows)
+
+1. Run `Community\clearway-panel\Clearway companion\Clearway.exe` (keep the `_internal` folder next to it). There is no window: Clearway runs as an icon next to the clock. **Double-click** the icon to open it; **right-click** it to connect, disconnect or quit. Keep it running while you fly. Tip: make a desktop shortcut.
+2. Windows SmartScreen may warn because the app isn't signed: **More info → Run anyway**. Windows Firewall will ask about network access: allow **Private networks**.
+3. The first time, your browser opens Clearway's **Settings** (later, double-click the tray icon). Enter:
+   - your **Hoppie logon code** (free at [hoppie.nl/acars](https://www.hoppie.nl/acars/system/register.html)); you can also paste it in the panel's CPDLC tab
    - your **VATSIM CID**
-4. Connect to VATSIM with your pilot client, then press **Connect**.
 
-### 2. Your phone (iPhone or Android)
+### 3. The vPilot plugin
+
+1. Close vPilot and copy `Clearway companion\vPilot plugin\Clearway.vPilot.dll` into vPilot's `Plugins` folder (right-click the vPilot shortcut > **Open file location** > `Plugins`; usually `C:\Users\<you>\AppData\Local\vPilot\Plugins`).
+2. **Unblock it:** right-click `Clearway.vPilot.dll` > **Properties** > tick **Unblock** > OK. Windows marks downloaded files, and vPilot silently ignores a blocked plugin (Clearway then shows "vPilot not opened / plugin not found").
+3. Start vPilot again.
+
+The **vPilot** tab (MSFS panel, phone and PC page) then works like vPilot's own window:
+
+- **Frequency** chat with everything on frequency (messages that mention you are highlighted and alert you), controller info (ATIS), METARs, broadcasts and SELCAL alerts
+- one tab per **private chat**; close a tab with × or `.close`
+- **Nearby ATC** with frequencies and distance; the arrow next to a controller shows their information
+- **Connect** (with SimBrief callsign and SELCAL checks) or connect as an observer, **Disconnect**, **Standby / Mode C** and **Ident**, and the **FP status** of your flight plan on VATSIM
+- dot commands: `.chat` `.msg` `.close` `.atis` `.wx` `.metar` `.wallop` `.clear` `.copy`, plus `.modec` `.standby` `.ident` `.connect` `.disconnect` and `.help`
+
+vPilot doesn't let plugins set the squawk code or tune radios, so `.x`/`.squawk`, `.com1`, `.com2`, `.com`, `.ctaf`, `.towerview`, `.aircraft`, `.debug`, `.reloadrules` and `.ignore` still need vPilot's own window. Clearway tells you when you type one.
+
+### 4. Your phone (optional, iPhone or Android)
 
 1. Make sure the phone is on the same Wi-Fi as the PC.
 2. In Clearway on the PC, open **Settings** and scan the **Pair your phone** QR code with the phone's camera.
@@ -51,35 +77,16 @@ Only the companion talks to Hoppie, so the phone and the panel never compete for
 4. For notifications, install **ntfy** from the App Store or Google Play (free, no account). Tap **+** and subscribe to the topic shown in Clearway's Settings. Press **Send test** to check.
 
 > Notifications arrive anywhere, but replying from the phone needs your home Wi-Fi.
+### In the sim
 
-### 4. The vPilot plugin (optional)
+Click the Clearway icon in the toolbar. A small round icon appears:
 
-1. Download `clearway-vpilot-plugin.zip` from the Releases page.
-2. Close vPilot and copy `Clearway.vPilot.dll` into vPilot's `Plugins` folder (right-click the vPilot shortcut > **Open file location** > `Plugins`; usually `C:\Users\<you>\AppData\Local\vPilot\Plugins`).
-3. **Unblock it:** right-click `Clearway.vPilot.dll` > **Properties** > tick **Unblock** > OK. Windows marks downloaded files, and vPilot silently ignores a blocked plugin (Clearway then shows "vPilot not opened / plugin not found").
-4. Start vPilot again.
+- **click** it to open or collapse the card (tabs: vPilot, CPDLC, SELCAL, Radar)
+- **drag** it anywhere on screen (the position is remembered)
+- **right click** it to peek at the latest unread message (vPilot first) and answer it; with nothing unread, it marks the latest message unread again
+- it turns **solid** when a message arrives (cyan for vPilot, amber for CPDLC) until you read it; the speaker button in the card mutes this
 
-The **vPilot** tab (phone, PC page and MSFS panel) now works like vPilot's own window:
-
-- **Frequency** chat with everything on frequency (messages that mention you are highlighted and alert you), controller info (ATIS), METARs, broadcasts and SELCAL alerts
-- one tab per **private chat**; close a tab with × or `.close`
-- **Nearby ATC** with frequencies and distance; the arrow next to a controller shows their information
-- **Connect / Disconnect**, **Standby / Mode C** and **Ident**
-- dot commands: `.chat` `.msg` `.close` `.atis` `.wx` `.metar` `.wallop` `.clear` `.copy`, plus `.modec` `.standby` `.ident` `.connect` `.disconnect` and `.help`
-
-vPilot doesn't let plugins set the squawk code or tune radios, so `.x`/`.squawk`, `.com1`, `.com2`, `.com`, `.ctaf`, `.towerview`, `.aircraft`, `.debug`, `.reloadrules` and `.ignore` still need vPilot's own window. Clearway tells you when you type one.
-
-### 3. The MSFS panel (optional)
-
-1. Download `clearway-panel.zip` from the Releases page.
-2. Unzip it into your MSFS **Community** folder.
-3. In the sim, click the Clearway icon in the toolbar. A small round icon appears:
-   - **click** it to open or collapse the message card
-   - **drag** it anywhere on screen (the position is remembered)
-   - **right click** it to peek at the latest unread message (vPilot first) and mark it read; with nothing unread, it marks the latest message unread again
-   - it **flashes** when a message arrives and **stays amber** until you answer or acknowledge it
-
-The panel is a transparent full-screen layer, and only the icon and card catch the mouse. It's designed for 16:9 screens (1080p, 1440p, 4K).
+The panel is a transparent full-screen layer, and only the icon and card catch the mouse. It's designed for 16:9 screens (1080p, 1440p, 4K) and works in MSFS 2020 and 2024.
 
 While you type in a panel text field, Clearway keeps the keys away from MSFS key bindings and from programs such as ChasePlane, so typing never moves the camera or flips a switch. Controllers (yoke, throttle, joystick) keep working. Press **Esc** or click anywhere outside the panel to hand the keyboard back. This can be switched off in Clearway's settings.
 
