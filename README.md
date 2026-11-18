@@ -55,8 +55,9 @@ Only the companion talks to Hoppie, so the phone and the panel never compete for
 ### 4. The vPilot plugin (optional)
 
 1. Download `clearway-vpilot-plugin.zip` from the Releases page.
-2. Copy `Clearway.vPilot.dll` into vPilot's `Plugins` folder (for example `C:\vPilot\Plugins`).
-3. Restart vPilot. Its message window shows "Clearway plugin loaded".
+2. Close vPilot and copy `Clearway.vPilot.dll` into vPilot's `Plugins` folder (right-click the vPilot shortcut > **Open file location** > `Plugins`; usually `C:\Users\<you>\AppData\Local\vPilot\Plugins`).
+3. **Unblock it:** right-click `Clearway.vPilot.dll` > **Properties** > tick **Unblock** > OK. Windows marks downloaded files, and vPilot silently ignores a blocked plugin (Clearway then shows "vPilot not opened / plugin not found").
+4. Start vPilot again.
 
 The **vPilot** tab (phone, PC page and MSFS panel) now works like vPilot's own window:
 
