@@ -222,23 +222,36 @@
     var bubble = el("cw-bubble");
     var status = !reachable ? "offline" : (state ? state.status : "offline");
     var vpOnline = reachable && state && state.vpilot && state.vpilot.connected;
+    // vPilot messages meant for me (private chats, SELCAL, frequency text with my callsign) colour the icon;
+    // the rest (broadcasts, all-frequency alerts) only show a faint dot at its bottom right
+    var vpMine = 0;
+    if (vpCount && state) for (var i = 0; i < state.messages.length; i++) {
+      var m = state.messages[i];
+      if (m.dir === "in" && !m.acked && (m.kind === "pm" || m.kind === "selcal" || (m.kind === "radio" && m.mention))) vpMine++;
+    }
+    var vpOther = vpCount - vpMine;
 
     bubble.className = "";
     if (status === "online" || vpOnline) bubble.classList.add("online");
     if (!reachable) bubble.classList.add("error");
+    if (!vpOnline) bubble.classList.add("novatsim");     // the faint icon turns yellow while not on VATSIM
     if (paused) {
       // notifications paused: the icon stays faint and quiet (no flash, colour or counters)
       bubble.classList.add("paused");
       if (!expanded) bubble.classList.add("idle");
     } else {
       // first seconds after the panel opens: fully visible so it's easy to find, then the usual faint icon
-      if (!vpCount && !cpCount && !expanded && Date.now() >= introUntil) bubble.classList.add("idle");   // nearly invisible until needed
-      // a new message simply turns the icon solid (no flashing): amber for CPDLC, cyan for vPilot only
+      if (!vpMine && !cpCount && !expanded && Date.now() >= introUntil) bubble.classList.add("idle");   // nearly invisible until needed
+      // a new message simply turns the icon solid (no flashing): amber for CPDLC, cyan for vPilot messages to me
       if (cpCount > 0) bubble.classList.add("alert");
-      else if (vpCount > 0) bubble.classList.add("alert-vp");
+      else if (vpMine > 0) bubble.classList.add("alert-vp");
     }
-    lastVp = vpCount; lastCp = cpCount;
-    setDot("cw-ndot-vp", paused ? 0 : vpCount); setDot("cw-ndot-cp", paused ? 0 : cpCount);
+    lastVp = vpMine; lastCp = cpCount;
+    el("cw-odot").classList.toggle("hidden", paused || !vpOther || vpMine > 0 || cpCount > 0);
+    var cs = myCallsign(), bcs = el("cw-bub-cs");
+    if (bcs.textContent !== cs) bcs.textContent = cs;
+    bcs.classList.toggle("hidden", !cs);
+    setDot("cw-ndot-vp", paused ? 0 : vpMine); setDot("cw-ndot-cp", paused ? 0 : cpCount);
     setDot("cw-tdot-vp", vpCount); setDot("cw-tdot-cp", cpCount);
 
     renderVpilot();
@@ -741,6 +754,15 @@
   function renderNotes() {
     var ta = el("cw-notes-text");
     if (state && !notesDirty && document.activeElement !== ta && ta.value !== (state.notes || "")) ta.value = state.notes || "";
+    var cs = myCallsign(), h = el("cw-notes-cs");
+    if (h.textContent !== cs) h.textContent = cs;
+    el("cw-notes-head").classList.toggle("hidden", !cs);
+  }
+  // my callsign: the one vPilot is connected with, else the CPDLC one
+  function myCallsign() {
+    if (!state) return "";
+    return String((state.vpilot && state.vpilot.connected && state.vpilot.callsign) || state.callsign ||
+      (state.vpilot && state.vpilot.callsign) || "").toUpperCase();
   }
 
   // ------------------------------------------------------------ render: SELCAL

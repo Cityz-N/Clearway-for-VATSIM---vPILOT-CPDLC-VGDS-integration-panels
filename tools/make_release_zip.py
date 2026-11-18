@@ -50,9 +50,15 @@ QUICK START
      your VATSIM CID.
    Tip: create a desktop shortcut to Clearway.exe.
 
-3. vPilot plugin (optional, for the vPilot tab):
-   close vPilot, copy "vPilot plugin\\Clearway.vPilot.dll" into vPilot's
-   "Plugins" folder (for example C:\\vPilot\\Plugins), then start vPilot again.
+3. vPilot plugin (for the vPilot tab):
+   - Close vPilot.
+   - Copy "vPilot plugin\\Clearway.vPilot.dll" into vPilot's "Plugins" folder.
+     To find it: right-click the vPilot shortcut > Open file location > Plugins
+     (usually C:\\Users\\<you>\\AppData\\Local\\vPilot\\Plugins).
+   - IMPORTANT: right-click Clearway.vPilot.dll > Properties > tick "Unblock" > OK.
+     Windows marks downloaded files, and vPilot silently ignores a blocked plugin
+     (Clearway then says "vPilot not opened / plugin not found").
+   - Start vPilot again.
 
 4. In MSFS, click the Clearway icon in the toolbar. A small round icon appears:
    click it to open the card, drag it anywhere on screen.

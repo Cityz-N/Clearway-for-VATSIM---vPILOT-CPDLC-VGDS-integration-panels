@@ -165,7 +165,7 @@
 
   function pollAtc() {
     getJSON("/atc?v=" + atcVer, function (d) {
-      if (!d || d.same) return;
+      if (!d || d.same || !d.sectors || !d.airports) return;    // an error reply (data still loading): next poll
       var i, j, s, poly, mp, k, bb;
       for (i = 0; i < d.sectors.length; i++) {
         s = d.sectors[i];
@@ -414,7 +414,7 @@
     drawAirports(ws);
     // sector labels (after the airport badges, so they avoid them)
     if (view.z >= 5) {
-      ctx.font = "600 10px 'Roboto-Regular', Roboto, 'Segoe UI', Arial, sans-serif";
+      ctx.font = "600 10px Selawik, 'Roboto-Regular', Roboto, 'Segoe UI', Arial, sans-serif";
       ctx.textBaseline = "middle";
       for (i = 0; i < secs.length; i++) {
         s = secs[i];
@@ -456,7 +456,7 @@
     }
     ctx.fill();
     if (!showText) return;
-    ctx.font = "9px 'Roboto-Regular', Roboto, 'Segoe UI', Arial, sans-serif";
+    ctx.font = "9px Selawik, 'Roboto-Regular', Roboto, 'Segoe UI', Arial, sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "top";
     ctx.fillStyle = "rgba(170,188,208,0.5)";
     for (var i = 0; i < apHits.length; i++) {
@@ -521,7 +521,7 @@
     badgeHits = [];
     if (view.z < 3.5) return;
     var i, j, a, list, bx, by;
-    ctx.font = "700 9px 'Roboto-Regular', Roboto, 'Segoe UI', Arial, sans-serif";
+    ctx.font = "700 9px Selawik, 'Roboto-Regular', Roboto, 'Segoe UI', Arial, sans-serif";
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
     for (i = 0; i < atc.airports.length; i++) {
@@ -656,7 +656,7 @@
     if (!list.length) return;
     ctx.textBaseline = "alphabetic";
     var lh = 11, i, p;
-    var BOLD = "700 10px 'Roboto-Regular', Roboto, 'Segoe UI', Arial, sans-serif", REG = "10px 'Roboto-Regular', Roboto, 'Segoe UI', Arial, sans-serif";
+    var BOLD = "700 10px Selawik, 'Roboto-Regular', Roboto, 'Segoe UI', Arial, sans-serif", REG = "10px Selawik, 'Roboto-Regular', Roboto, 'Segoe UI', Arial, sans-serif";
     for (i = 0; i < list.length; i++) {
       p = list[i];
       var isSel = groups.sel.length && p === groups.sel[0];
@@ -719,6 +719,7 @@
 
   function showCard() {
     var c = el("card"), h = "";
+    showTraffic();
     if (!selected) { c.className = "hidden"; return; }
     if (selected.kind === "pilot") {
       var p = null;
@@ -739,25 +740,37 @@
       h = ctlHtml({ cs: s.cs, f: s.f, n: s.n, atis: s.atis }, s.name);
     } else if (selected.kind === "airport") {
       var a = opts.atc ? findAtcAirport(selected.key) : null, t = trafficAps[selected.key];
-      if (!a && !t) { selected = null; c.className = "hidden"; return; }
-      h = "<div class='cs'>" + esc(selected.key) + "</div>" + (t && t.name ? "<div class='sub'>" + esc(t.name) + "</div>" : "");
-      if (t) {
-        h += "<div class='lines'>" +
-          "<span id='rd-tDep' class='lt dep" + (opts.depLines ? " on" : "") + "'>Departures " + t.nDep + "</span>" +
-          "<span id='rd-tArr' class='lt arr" + (opts.arrLines ? " on" : "") + "'>Arrivals " + t.nArr + "</span></div>";
-      }
+      if (!a && !t) { selected = null; c.className = "hidden"; showTraffic(); return; }
+      // the airport name sits on the ICAO line; departures/arrivals live in their own box (showTraffic)
+      h = "<div class='cs'>" + esc(selected.key) + (t && t.name ? "<span class='nm'>" + esc(t.name) + "</span>" : "") + "</div>";
       if (a) for (var j = 0; j < a.c.length; j++) h += ctlHtml(a.c[j]);
     }
     c.innerHTML = "<span class='x' id='rd-cardx'><i class='a'></i><i class='b'></i></span>" + h;
-    c.className = "";
+    c.className = selected.kind === "airport" ? "ap" : "";
     el("cardx").onclick = function () { selected = null; showCard(); dirty = true; };
-    if (el("tDep")) {
-      el("tDep").onclick = function () { opts.depLines = !opts.depLines; save("radar.opts", opts); showCard(); dirty = true; };
-      el("tArr").onclick = function () { opts.arrLines = !opts.arrLines; save("radar.opts", opts); showCard(); dirty = true; };
-    }
+    // controller information is clamped to two lines: a click shows all of it (and stays open across refreshes)
+    var ats = c.getElementsByClassName("atis");
+    for (var m = 0; m < ats.length; m++) ats[m].onclick = function () {
+      var k = this.getAttribute("data-k");
+      if (openAtis[k]) delete openAtis[k]; else openAtis[k] = 1;
+      this.className = "atis" + (openAtis[k] ? " open" : "");
+    };
+  }
+  var openAtis = {};
+  // departures / arrivals: a small box at the bottom right, only while an airport is selected.
+  // Two circles with the counts (red = departures, green = arrivals); filled = its lines are drawn.
+  function showTraffic() {
+    var b = el("traf"), t = selected && selected.kind === "airport" ? trafficAps[selected.key] : null;
+    if (!t) { b.className = "hidden"; return; }
+    b.className = "";
+    el("tDep").className = "tc dep" + (opts.depLines ? " on" : "");
+    el("tArr").className = "tc arr" + (opts.arrLines ? " on" : "");
+    el("tDepN").textContent = t.nDep;
+    el("tArrN").textContent = t.nArr;
   }
   function ctlHtml(k, voice) {
-    var atis = k.atis && k.atis.length ? "<div class='atis'>" + esc(k.atis.join(" ")) + "</div>" : "";
+    var atis = k.atis && k.atis.length ? "<div class='atis" + (openAtis[k.cs] ? " open" : "") + "' data-k='" + esc(k.cs) +
+      "' title='Click to show all'>" + esc(k.atis.join(" ")) + "</div>" : "";
     return "<div class='ctl'><div class='row'><b>" + esc(k.cs) + "</b><span class='freq'>" + esc(k.f) + "</span></div>" +
       (voice ? "<div class='sub'>" + esc(voice) + "</div>" : "") +
       (k.n ? "<div class='sub'>" + esc(k.n) + "</div>" : "") + atis + "</div>";
@@ -881,6 +894,8 @@
 
   el("zin").onclick = function () { zoomAt(1, W / 2, H / 2); };
   el("zout").onclick = function () { zoomAt(-1, W / 2, H / 2); };
+  el("tDep").onclick = function () { opts.depLines = !opts.depLines; save("radar.opts", opts); showTraffic(); dirty = true; };
+  el("tArr").onclick = function () { opts.arrLines = !opts.arrLines; save("radar.opts", opts); showTraffic(); dirty = true; };
   // Track button: keeps your aircraft in the centre until you turn it off or drag the map
   function myPos() {
     if (me) return me;
@@ -1082,6 +1097,10 @@
       el("tools").style.fontSize = btnFont + "px";
       el("topright").style.fontSize = btnFont + "px";
     }
+    // departures / arrivals: the same size (and height) as the pilot count box (0.92 of the button size)
+    el("traf").style.fontSize = (btnFont * 0.92) + "px";
+    // the info window starts just right of the button column (its text is smaller than the buttons')
+    el("card").style.left = (el("tools").offsetLeft + el("tools").offsetWidth + Math.round(btnFont * 0.6)) + "px";
     lastSize = r.width + "x" + r.height;
     dirty = true;
   }
@@ -1295,6 +1314,10 @@
       '<div id="rd-detach" class="hidden" title="Open the radar in its own window"><i class="box"></i><i class="out"></i></div>' +
     '</div>' +
     '<div id="rd-card" class="hidden"></div>' +
+    '<div id="rd-traf" class="hidden">' +
+      '<div id="rd-tDep" class="tc dep" title="Departures: show their routes"><span id="rd-tDepN">0</span><i>DEP</i></div>' +
+      '<div id="rd-tArr" class="tc arr" title="Arrivals: show their routes"><span id="rd-tArrN">0</span><i>ARR</i></div>' +
+    '</div>' +
     '<div id="rd-perf" class="hidden"></div>' +
     '<div id="rd-credit">Map (c) Esri, HERE, Garmin, (c) OpenStreetMap contributors | VATGlasses CC BY-NC-SA | VATSpy CC BY-SA</div>';
 

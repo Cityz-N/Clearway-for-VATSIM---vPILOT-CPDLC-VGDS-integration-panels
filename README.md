@@ -157,6 +157,7 @@ tools/                build scripts, icon generator, mock Hoppie server
 - Inspired by [EasyCPDLC](https://github.com/quassbutreally/EasyCPDLC) by Joshua Seagrave. Clearway is an independent implementation and contains no EasyCPDLC code.
 - [Hoppie's ACARS](https://www.hoppie.nl/acars/) by Jeroen Hoppenbrouwers makes all of this possible.
 - QR codes by [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (MIT).
+- MSFS panel font: [Selawik](https://github.com/microsoft/Selawik) by Microsoft ([SIL Open Font License 1.1](msfs-panel/html_ui/InGamePanels/ClearwayPanel/fonts/Selawik-OFL.txt)).
 
 Clearway is not affiliated with Hoppie, VATSIM, vPilot, ntfy or Microsoft. It's for flight simulation only.
 

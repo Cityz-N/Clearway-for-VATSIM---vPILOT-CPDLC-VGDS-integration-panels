@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1
+
+- MSFS panel: accents and symbols no longer show as empty boxes in MSFS 2024. The panel and the radar now use the bundled Selawik font (Microsoft's open version of Segoe UI, SIL Open Font License)
+- MSFS panel: the floating icon turns cyan only for vPilot messages meant for you (private messages, SELCAL, frequency text with your callsign). Other unread messages (broadcasts) show a small grey dot at its bottom left. Hover the faint icon to see your callsign
+- MSFS panel: the faint icon is yellow while you're not connected to VATSIM
+- MSFS panel: the notepad shows your callsign at the top right
+- Radar: the info windows (airport, controller, pilot) are about a third smaller: the airport name is on the ICAO line and each controller's information is cut to two lines (click it to read it all)
+- Radar: departures and arrivals have their own slim box at the bottom right (the same height as the pilot count) while an airport is selected: a red circle (departures) and a green circle (arrivals) with the counts. Click one to show or hide its lines; filled means shown
+- Radar: fixed an error when the controller data wasn't ready yet
+
 ## 1.0.0
 
 - New **Radar** tab in the MSFS panel: live VATSIM traffic on a dark map. Planes show their callsign and type with the destination underneath; click one for the full tag (frequency it's tuned to, altitude, speed) and its details. Planes on the ground appear when zoomed in to airport level

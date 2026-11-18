@@ -3,6 +3,12 @@
    Sizes are in em; JS sets the root font size from the screen height (14px at 1080p).
    Dark theme by default; #cw-root.light switches to the pale palette (set from Clearway's settings). */
 
+/* Selawik (Microsoft, SIL Open Font License, fonts/Selawik-OFL.txt): the open version of Segoe UI, used for all
+   the panel's text and the radar. MSFS 2024's own fonts show accents and symbols as empty boxes. */
+@font-face { font-family: "Selawik"; src: url("fonts/selawk.ttf"); font-weight: normal; font-style: normal; }
+@font-face { font-family: "Selawik"; src: url("fonts/selawksb.ttf"); font-weight: 600; font-style: normal; }
+@font-face { font-family: "Selawik"; src: url("fonts/selawkb.ttf"); font-weight: bold; font-style: normal; }
+
 html { pointer-events: none; }
 
 ingame-ui#ClearwayPanel {
@@ -44,7 +50,7 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
   --shadow: rgba(0, 0, 0, 0.5);
 
   position: absolute; left: 0; top: 0; width: 100%; height: 100%;
-  font-family: "Roboto", "Segoe UI", sans-serif;
+  font-family: "Selawik", "Roboto", "Segoe UI", sans-serif;
   font-size: 14px;
   color: var(--text);
   pointer-events: none;
@@ -132,7 +138,7 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 .cw-dot.error { background-color: var(--rose); }
 .cw-dot.connecting { background-color: var(--amber); }
 .cw-pill {
-  font-family: "Consolas", monospace; font-weight: bold; font-size: 0.85em;
+  font-family: "Selawik", "Consolas", monospace; font-weight: bold; font-size: 0.85em;
   padding: 0.25em 0.7em; border-radius: 1em; margin-right: 0.6em;
   background-color: var(--mint-soft); color: var(--mint);
 }
@@ -168,9 +174,9 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 }
 .cw-chip.telex { background-color: var(--lav-soft); color: var(--lav); }
 .cw-chip.info { background-color: var(--surface-2); color: var(--muted); }
-.cw-station { font-family: "Consolas", monospace; font-weight: bold; color: var(--text); flex-grow: 1; }
-.cw-time { font-family: "Consolas", monospace; }
-.cw-text { font-family: "Consolas", monospace; font-size: 0.98em; margin-top: 0.35em; line-height: 1.4em; }
+.cw-station { font-family: "Selawik", "Consolas", monospace; font-weight: bold; color: var(--text); flex-grow: 1; }
+.cw-time { font-family: "Selawik", "Consolas", monospace; }
+.cw-text { font-family: "Selawik", "Consolas", monospace; font-size: 0.98em; margin-top: 0.35em; line-height: 1.4em; }
 .cw-var { background-color: var(--accent-soft); color: var(--var-text); border-radius: 0.3em; padding: 0 0.2em; }
 .cw-state { font-size: 0.8em; color: var(--muted); margin-top: 0.4em; }
 .cw-sys { text-align: center; font-size: 0.78em; color: var(--muted); margin: 0.2em 0 0.6em; }
@@ -207,7 +213,7 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 .cw-input {
   flex-grow: 1; min-width: 0;
   border: 1px solid var(--line); border-radius: 0.6em; background-color: var(--bg);
-  padding: 0.55em 0.7em; font-family: "Consolas", monospace; font-size: 1em; color: var(--text);
+  padding: 0.55em 0.7em; font-family: "Selawik", "Consolas", monospace; font-size: 1em; color: var(--text);
   text-transform: uppercase;
 }
 .cw-input:focus { border-color: var(--accent); }
@@ -259,14 +265,14 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
   display: flex; align-items: center; font-size: 0.8em;
   background-color: var(--surface); border-radius: 0.5em; padding: 0.35em 0.6em; margin-bottom: 0.3em;
 }
-.cw-trash-text { flex-grow: 1; min-width: 0; color: var(--muted); font-family: "Consolas", monospace;
+.cw-trash-text { flex-grow: 1; min-width: 0; color: var(--muted); font-family: "Selawik", "Consolas", monospace;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 0.6em; }
 .cw-trash-all { text-align: right; font-size: 0.8em; margin-bottom: 0.6em; }
 /* vPilot message kinds */
 .cw-chip.pm { background-color: var(--mint-soft); color: var(--mint); }
 .cw-chip.radio, .cw-chip.selcal { background-color: var(--amber-soft); color: var(--amber); }
 .cw-chip.broadcast { background-color: var(--rose-soft); color: var(--rose); }
-.cw-input.plain { text-transform: none; font-family: "Roboto", "Segoe UI", sans-serif; }
+.cw-input.plain { text-transform: none; font-family: "Selawik", "Roboto", "Segoe UI", sans-serif; }
 /* ================= v0.3: two tabs ================= */
 #cw-root { --vp: #00d8d4; --vp-soft: rgba(0, 216, 212, 0.16); --cp: #f5b14c; }
 #cw-root.light { --vp: #00a8a5; --vp-soft: rgba(0, 168, 165, 0.12); }
@@ -307,7 +313,7 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 
 /* pane bar (status line under the tabs) */
 .cw-bar { display: flex; align-items: center; padding: 0.55em 0.8em; border-bottom: 1px solid var(--line); background-color: var(--surface); }
-.cw-bar-title { flex-grow: 1; font-family: "Consolas", monospace; font-weight: bold; font-size: 0.92em; }
+.cw-bar-title { flex-grow: 1; font-family: "Selawik", "Consolas", monospace; font-weight: bold; font-size: 0.92em; }
 .cw-mini {
   margin-left: 0.3em; padding: 0.3em 0.55em; border-radius: 0.5em; background-color: var(--surface-2);
   font-size: 0.78em; font-weight: bold; color: var(--muted); cursor: pointer;
@@ -324,7 +330,7 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 .cw-chips { display: flex; flex-wrap: wrap; padding: 0.5em 0.8em 0.1em; }
 .cw-chip-tab {
   display: flex; align-items: center; padding: 0.25em 0.65em; margin: 0 0.35em 0.35em 0; border-radius: 1em;
-  background-color: var(--surface); color: var(--muted); font-family: "Consolas", monospace; font-size: 0.8em; font-weight: bold; cursor: pointer;
+  background-color: var(--surface); color: var(--muted); font-family: "Selawik", "Consolas", monospace; font-size: 0.8em; font-weight: bold; cursor: pointer;
 }
 .cw-chip-tab.on { background-color: var(--vp-soft); color: var(--vp); }
 .cw-chip-tab.atc { margin-left: auto; }
@@ -341,9 +347,9 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 .cw-vmsg.mention { border-color: var(--vp); }
 .cw-vmsg.unread { border-left: 0.25em solid #00d8d4; }
 .cw-vtext { margin-top: 0.2em; font-size: 0.95em; line-height: 1.35em; }
-.cw-freq { font-family: "Consolas", monospace; color: var(--vp); margin: 0 0.4em; }
+.cw-freq { font-family: "Selawik", "Consolas", monospace; color: var(--vp); margin: 0 0.4em; }
 .cw-vinfo { margin-bottom: 0.45em; padding: 0.45em 0.65em; border-radius: 0.7em; background-color: var(--mint-soft); }
-.cw-pre { margin-top: 0.2em; font-family: "Consolas", monospace; font-size: 0.85em; color: var(--mint); white-space: pre-wrap; }
+.cw-pre { margin-top: 0.2em; font-family: "Selawik", "Consolas", monospace; font-size: 0.85em; color: var(--mint); white-space: pre-wrap; }
 .cw-valert { margin-bottom: 0.45em; padding: 0.4em 0.65em; border-radius: 0.7em; font-size: 0.88em; }
 .cw-valert.selcal { background-color: var(--amber-soft); color: var(--amber); }
 .cw-valert.broadcast { background-color: var(--rose-soft); color: var(--rose); }
@@ -351,7 +357,7 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 /* nearby ATC */
 .cw-atc-row { display: flex; align-items: center; padding: 0.4em 0.2em; border-bottom: 1px solid var(--line); cursor: pointer; }
 .cw-atc-row:hover { background-color: var(--surface); }
-.cw-atc-cs { flex-grow: 1; font-family: "Consolas", monospace; font-weight: bold; font-size: 0.88em; }
+.cw-atc-cs { flex-grow: 1; font-family: "Selawik", "Consolas", monospace; font-weight: bold; font-size: 0.88em; }
 .cw-atc-d { width: 4.5em; text-align: right; color: var(--muted); font-size: 0.8em; margin-right: 0.6em; }
 .cw-atc-hint { padding: 0.5em 0.2em; }
 
@@ -364,7 +370,7 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 .cw-notes {
   width: 100%; height: 22em; resize: none; border: 1px solid var(--line); border-radius: 0.6em;
   background-color: var(--bg); color: var(--text); padding: 0.6em 0.7em;
-  font-family: "Consolas", monospace; font-size: 0.95em; line-height: 1.45em;
+  font-family: "Selawik", "Consolas", monospace; font-size: 0.95em; line-height: 1.45em;
 }
 .cw-notes:focus { border-color: var(--accent); }
 
@@ -398,8 +404,8 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
   font-size: 0.85em;
 }
 .cw-com-row { display: flex; align-items: center; padding: 0.15em 0; white-space: nowrap; }
-.cw-com-row b { width: 3.2em; font-family: "Consolas", monospace; }
-.cw-com-stby { color: var(--muted); font-family: "Consolas", monospace; margin-left: 0.4em; }
+.cw-com-row b { width: 3.2em; font-family: "Selawik", "Consolas", monospace; }
+.cw-com-stby { color: var(--muted); font-family: "Selawik", "Consolas", monospace; margin-left: 0.4em; }
 .cw-com-tx { margin-left: 0.6em; padding: 0 0.4em; border-radius: 0.4em; background-color: var(--mint-soft); color: var(--mint); font-weight: bold; font-size: 0.85em; }
 
 /* purpose labels */
@@ -424,7 +430,7 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 .cw-atc-info {
   margin: 0 0.2em 0.5em 1.95em; padding: 0.45em 0.6em; border-radius: 0.5em;
   background-color: var(--mint-soft); color: var(--mint);
-  font-family: "Consolas", monospace; font-size: 0.8em; line-height: 1.4em; white-space: pre-wrap;
+  font-family: "Selawik", "Consolas", monospace; font-size: 0.8em; line-height: 1.4em; white-space: pre-wrap;
 }
 
 /* shown while a text field holds the sim's keyboard */
@@ -436,7 +442,7 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 /* clock in the header: UTC (cyan), sim time (amber), local time (mint) */
 .cw-clock {
   margin-right: 0.35em; padding: 0.2em 0.45em; border-radius: 0.45em; cursor: pointer; white-space: nowrap;
-  font-family: "Consolas", monospace; font-size: 0.8em; font-weight: bold;
+  font-family: "Selawik", "Consolas", monospace; font-size: 0.8em; font-weight: bold;
 }
 .cw-clock:hover { background-color: var(--surface-2); }
 .cw-clock.utc { color: var(--vp); }
@@ -482,7 +488,7 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 .cw-peek-kind { font-weight: bold; font-size: 0.85em; padding: 0.1em 0.5em; border-radius: 0.7em; background-color: var(--amber-soft); color: var(--cp); }
 #cw-peek.vp .cw-peek-kind { background-color: var(--vp-soft); color: var(--vp); }
 .cw-peek-text { margin-top: 0.4em; line-height: 1.35em; max-height: 9.5em; overflow: hidden; word-wrap: break-word; }
-.cw-peek-text.mono { font-family: "Consolas", monospace; }
+.cw-peek-text.mono { font-family: "Selawik", "Consolas", monospace; }
 .cw-peek-foot { margin-top: 0.45em; font-size: 0.85em; color: var(--muted); }
 .cw-peek-foot.unread { color: var(--amber); }
 #cw-peek .cw-actions { margin-top: 0.5em; }
@@ -501,7 +507,7 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 .cw-input.dim { opacity: 0.4; }
 /* focus debug readout (test builds only) */
 #cw-debug { position: absolute; left: 50%; top: 1%; width: 34em; margin-left: -17em; padding: 0.6em 0.8em; border-radius: 0.6em;
-  background-color: rgba(0, 0, 0, 0.82); color: #9df5c6; font-family: "Consolas", monospace; font-size: 0.85em; line-height: 1.3em;
+  background-color: rgba(0, 0, 0, 0.82); color: #9df5c6; font-family: "Selawik", "Consolas", monospace; font-size: 0.85em; line-height: 1.3em;
   white-space: pre; pointer-events: none; z-index: 20; }
 
 /* ---------------- v0.9.5: SELCAL tab + flight plan warning ---------------- */
@@ -521,10 +527,10 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 }
 .cw-sc-ofp-top { display: flex; align-items: center; }
 .cw-sc-ofp-tag { font-size: 0.8em; font-weight: bold; letter-spacing: 0.05em; color: var(--lav); background-color: var(--lav-soft); padding: 0.1em 0.5em; border-radius: 1em; margin-right: 0.5em; }
-.cw-sc-ofp-cs { font-family: "Consolas", monospace; font-weight: bold; flex-grow: 1; }
-.cw-sc-ofp-route { font-family: "Consolas", monospace; color: var(--muted); font-size: 0.92em; }
+.cw-sc-ofp-cs { font-family: "Selawik", "Consolas", monospace; font-weight: bold; flex-grow: 1; }
+.cw-sc-ofp-route { font-family: "Selawik", "Consolas", monospace; color: var(--muted); font-size: 0.92em; }
 .cw-sc-ofp-code { display: flex; align-items: center; margin-top: 0.4em; }
-.cw-sc-ofp-code b { font-family: "Consolas", monospace; font-size: 1.35em; letter-spacing: 0.08em; margin-right: 0.6em; }
+.cw-sc-ofp-code b { font-family: "Selawik", "Consolas", monospace; font-size: 1.35em; letter-spacing: 0.08em; margin-right: 0.6em; }
 .cw-sc-ofp-code .cw-sc-used { flex-grow: 1; margin: 0; }
 .cw-sc-ofp-code .cw-mini { margin-left: 0.4em; }
 .cw-sc-cs { display: flex; align-items: center; }
@@ -532,7 +538,7 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
   width: 3.3em; height: 2.35em; border-radius: 0.6em; margin-right: 0.5em; flex-shrink: 0;
   background-color: var(--surface); border: 1px solid var(--line); overflow: hidden;
   display: flex; align-items: center; justify-content: center;
-  font-family: "Consolas", monospace; font-weight: bold; color: var(--muted); font-size: 0.9em;
+  font-family: "Selawik", "Consolas", monospace; font-weight: bold; color: var(--muted); font-size: 0.9em;
 }
 .cw-sc-tile.logo { background-color: #ffffff; }
 .cw-sc-tile img { max-width: 92%; max-height: 86%; }
@@ -545,7 +551,7 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 .cw-sc-code-box.ext { margin-right: 0; }
 .cw-sc-label { font-size: 0.75em; font-weight: bold; color: var(--muted); letter-spacing: 0.03em; }
 .cw-sc-label span { font-weight: normal; opacity: 0.8; }
-.cw-sc-code { font-family: "Consolas", monospace; font-weight: bold; font-size: 1.75em; letter-spacing: 0.08em; margin: 0.12em 0; color: var(--text); }
+.cw-sc-code { font-family: "Selawik", "Consolas", monospace; font-weight: bold; font-size: 1.75em; letter-spacing: 0.08em; margin: 0.12em 0; color: var(--text); }
 .cw-sc-code-box.ext .cw-sc-code { font-size: 1.4em; margin: 0.25em 0; }
 .cw-sc-used { font-size: 0.75em; color: var(--muted); min-height: 1.1em; }
 .cw-sc-used.free { color: var(--mint); }
@@ -559,14 +565,14 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 }
 .cw-sc-row .cw-sc-tile { width: 2.6em; height: 1.85em; font-size: 0.75em; }
 .cw-sc-who { flex-grow: 1; min-width: 0; }
-.cw-sc-who b { font-family: "Consolas", monospace; display: block; font-size: 0.92em; }
+.cw-sc-who b { font-family: "Selawik", "Consolas", monospace; display: block; font-size: 0.92em; }
 .cw-sc-who span { font-size: 0.72em; color: var(--muted); }
-.cw-sc-rcodes { text-align: right; font-family: "Consolas", monospace; font-weight: bold; font-size: 0.92em; }
-.cw-sc-rcodes i { font-style: normal; font-size: 0.7em; color: var(--muted); margin-right: 0.35em; font-family: sans-serif; }.cw-sc-check { display: flex; align-items: center; margin-top: 0.5em; padding-top: 0.6em; border-top: 1px solid var(--line); }
+.cw-sc-rcodes { text-align: right; font-family: "Selawik", "Consolas", monospace; font-weight: bold; font-size: 0.92em; }
+.cw-sc-rcodes i { font-style: normal; font-size: 0.7em; color: var(--muted); margin-right: 0.35em; font-family: "Selawik", sans-serif; }.cw-sc-check { display: flex; align-items: center; margin-top: 0.5em; padding-top: 0.6em; border-top: 1px solid var(--line); }
 .cw-sc-check .cw-input { padding: 0.45em 0.65em; font-size: 0.92em; }
 .cw-sc-check .cw-btn { margin: 0 0 0 0.45em; }
 .cw-sc-check-res { display: flex; align-items: center; margin-top: 0.45em; }
-.cw-sc-check-res b { font-family: "Consolas", monospace; font-size: 1.2em; letter-spacing: 0.08em; margin-right: 0.6em; }
+.cw-sc-check-res b { font-family: "Selawik", "Consolas", monospace; font-size: 1.2em; letter-spacing: 0.08em; margin-right: 0.6em; }
 .cw-sc-check-res .cw-sc-used { flex-grow: 1; }.cw-vp-sc-st { margin-left: auto; text-align: right; font-size: 0.72em; color: var(--muted); }
 .cw-vp-sc-st.free { color: var(--mint); font-weight: bold; }
 .cw-vp-sc-st.taken { color: var(--rose); font-weight: bold; }
@@ -605,7 +611,7 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 /* ---------------- v0.9.6.1: SimBrief callsign under the connect form's callsign box ---------------- */
 .cw-vp-under { display: flex; align-items: center; min-height: 1.2em; margin: -0.2em 0.1em 0.45em 0.15em; }
 .cw-vp-sb { font-size: 0.72em; color: var(--muted); cursor: pointer; white-space: nowrap; }
-.cw-vp-sb b { font-family: "Consolas", monospace; color: var(--text); }
+.cw-vp-sb b { font-family: "Selawik", "Consolas", monospace; color: var(--text); }
 .cw-vp-sb.match b { color: var(--mint); }
 .cw-vp-sb.differ b { color: var(--amber); }
 .cw-vp-sb-ref { width: 1.15em; height: 1.15em; margin-left: 0.3em; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 0.3em; }
@@ -613,7 +619,7 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 .cw-vp-sb-ref svg { width: 0.85em; height: 0.85em; stroke: var(--muted); stroke-width: 2.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .cw-vp-sb-ref.spinning svg { animation: cw-spin 0.8s linear infinite; }#cw-sc-sbuser-in { text-transform: none; }   /* SimBrief usernames keep their case */
 .cw-sc-sbname {
-  font-family: "Consolas", monospace; font-size: 0.75em; color: var(--muted); cursor: pointer;
+  font-family: "Selawik", "Consolas", monospace; font-size: 0.75em; color: var(--muted); cursor: pointer;
   padding: 0.15em 0.4em; border-radius: 0.4em; border: 1px dashed var(--line); margin-right: 0.15em;
   max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -679,3 +685,19 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 .cw-fp-warn svg { width: 0.95em; height: 0.95em; margin-left: 0.3em; fill: none; stroke: var(--rose); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .cw-fp-warn.ok { background-color: var(--mint-soft); color: var(--mint); }
 .cw-fp-warn.ok svg { stroke: var(--mint); }
+/* ---------------- 1.0.1 tweaks ---------------- */
+/* faint grey dot (bottom left) for vPilot messages not meant for me; it fades with the idle icon */
+.cw-odot { position: absolute; left: 0.05em; bottom: 0.05em; width: 0.7em; height: 0.7em; border-radius: 50%;
+  background-color: #c4c8d0; border: 1px solid rgba(0, 0, 0, 0.3); }
+/* faint icon while not connected to VATSIM: yellow instead of grey */
+#cw-bubble.idle.novatsim { background-color: #f2cf3a; border-color: #ffe27a; opacity: 0.3; }   /* 0.12 reads grey */
+#cw-bubble.idle.novatsim .cw-glyph { fill: #2b2405; }
+#cw-bubble.idle.novatsim:hover { border-color: #f2cf3a; }
+/* my callsign under the icon, while hovering the faint (idle) icon */
+.cw-bub-cs { display: none; position: absolute; top: 100%; left: 50%; width: 8em; margin: 0.35em 0 0 -4em; text-align: center; }
+#cw-bubble.idle:hover .cw-bub-cs { display: block; }
+.cw-bub-cs { font-size: 0.8em; font-weight: bold; letter-spacing: 0.04em; color: #00d8d4; text-shadow: 0 1px 3px #000, 0 0 2px #000; }
+/* notepad: my callsign, always visible in a slim header */
+#cw-notes-head { display: flex; justify-content: flex-end; margin: -0.25em 0 0.3em; }
+#cw-notes-cs { font-size: 0.8em; font-weight: bold; letter-spacing: 0.05em; color: var(--vp); }
+.cw-fontload { position: absolute; left: -100px; top: -100px; width: 10px; height: 10px; overflow: hidden; opacity: 0.01; font-family: "Selawik", sans-serif; }
