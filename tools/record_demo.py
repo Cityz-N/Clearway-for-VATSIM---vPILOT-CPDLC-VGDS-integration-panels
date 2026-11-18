@@ -1,7 +1,7 @@
 """Record the animated WebP of the MSFS panel in use (tools/demo_anim/flight.html).
 
 Needs the test Clearway and the fake vPilot running first (never the real Clearway on 8787):
-    python tools/dev_run.py
+    set CLEARWAY_FAKE_FP=1 & python tools/dev_run.py      (fake SimBrief + flight plan status from the mock server)
     set CLEARWAY_PORT=8797 & tools\\fake-vpilot\\bin\\Release\\net472\\FakeVpilot.exe vpilot-plugin\\compiled\\Clearway.vPilot.dll 1800
 Start both fresh (dev_run first, then the fake vPilot, which announces the nearby controllers when it
 starts), and keep the phone page closed: it marks the chat on screen as read.
@@ -76,6 +76,15 @@ def prepare():
         time.sleep(0.15)
     time.sleep(1)
     call("ack", {})
+    # vPilot part of the demo: SimBrief name set (the mock serves the plan), no flight plan filed yet, and the
+    # fake vPilot disconnected so the connect form can be shown
+    call("settings", {"simbrief_user": "demo"})
+    urllib.request.urlopen("http://127.0.0.1:8790/fp?set=none", timeout=5).read()
+    call("vp/disconnect", {})
+    for _ in range(20):
+        if not call("state?since=0")["vpilot"]["connected"]:
+            break
+        time.sleep(0.3)
 
 
 def radar_view():
@@ -98,7 +107,9 @@ def radar_view():
     s = math.sin(math.radians(plane[1]))
     x, y = (plane[2] + 180) / 360, 0.5 - math.log((1 + s) / (1 - s)) / (4 * math.pi)
     print(f"radar centred near {plane[0]} ({best} planes around)")
-    return f"{x:.6f},{y:.6f},7.4"
+    # your aircraft (the demo's stand-in sim position) a little south-east of that plane, flying north-west
+    me = f"{plane[1] - 0.25:.4f},{plane[2] + 0.35:.4f}"
+    return f"{x:.6f},{y:.6f},7.0", me
 
 
 class Cdp:
@@ -128,7 +139,7 @@ def edge_path():
     sys.exit("Microsoft Edge not found")
 
 
-def record(rv):
+def record(rv, me):
     shutil.rmtree(FRAMES, ignore_errors=True)
     FRAMES.mkdir(parents=True)
     profile = tempfile.mkdtemp(prefix="cw-demo-")
@@ -148,7 +159,7 @@ def record(rv):
         cdp = Cdp(page["webSocketDebuggerUrl"])
         cdp("Emulation.setDeviceMetricsOverride", width=1920, height=1080, deviceScaleFactor=1.5625, mobile=False)
         cdp("Page.enable")
-        cdp("Page.navigate", url=f"http://127.0.0.1:{PORT}/?rv={rv}")
+        cdp("Page.navigate", url=f"http://127.0.0.1:{PORT}/?rv={rv}&me={me}")
         for _ in range(200):
             if cdp.js("window.__ready === true"):
                 break
@@ -165,7 +176,7 @@ def record(rv):
             frames.append((path, t))
             if len(frames) % 8 == 0 and cdp.js("window.__done === true"):
                 break
-            if t > 240:
+            if t > 420:
                 break
         err = cdp.js("window.__error || ''")
         if err:
@@ -206,7 +217,7 @@ def main():
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     prepare()
-    frames = record(radar_view())
+    frames = record(*radar_view())
     server.shutdown()
     if "--no-encode" not in sys.argv:
         print("Saved", encode(frames))

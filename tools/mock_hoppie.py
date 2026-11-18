@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 queue: list[str] = []
 counter = [100]
+fp_status = ["none"]          # see GET /fp
 
 
 def nxt():
@@ -49,7 +50,11 @@ class H(BaseHTTPRequestHandler):
                 elif text.startswith("WHEN CAN WE"):
                     queue.append(f"{{{to} cpdlc {{/data2/{nxt()}/{mn}/AN/EXPECT HIGHER AT @1430@ CAN YOU ACCEPT @FL390@}}}}")
         elif kind == "telex":
-            queue.append(f"{{{to} telex {{CLEARED {q['from']} AS FILED. SQUAWK 4621. NEXT FREQ 121.975}}}}")
+            if "OCEANIC" in packet.upper():
+                queue.append(f"{{{to} telex {{OCEANIC CLEARANCE {q['from']} CLEARED TO KJFK VIA DINIM 51N020W 52N030W 52N040W "
+                             f"51N050W LOMSI FROM DINIM MAINTAIN FL370 M084 SQUAWK 2000}}}}")
+            else:
+                queue.append(f"{{{to} telex {{CLEARED {q['from']} AS FILED. SQUAWK 4621. NEXT FREQ 121.975}}}}")
         if reply == "ok" and queue:
             reply = "ok " + " ".join(queue)
             queue.clear()
@@ -57,6 +62,38 @@ class H(BaseHTTPRequestHandler):
         data = reply.encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    # Test helpers (used by tools/dev_run.py and the demo recording):
+    #   GET /simbrief?...           a fixed SimBrief flight plan (json=v2 shape), so no real account is needed
+    #   GET /fp, /fp?set=filed|none the VATSIM flight plan status dev_run reports for your callsign
+    #   GET /push?from=EGGX&text=…  a CPDLC message from ATC (WILCO / UNABLE answer) on the next poll
+    def do_GET(self):
+        url = urllib.parse.urlsplit(self.path)
+        q = {k: v[0] for k, v in urllib.parse.parse_qs(url.query).items()}
+        if url.path == "/simbrief":
+            body = {"atc": {"callsign": "BAW117"}, "general": {"icao_airline": "BAW", "flight_number": "117"},
+                    "origin": {"icao_code": "EGLL"}, "destination": {"icao_code": "KJFK"},
+                    "aircraft": {"icaocode": "B77W", "reg": "G-STBA", "selcal": ""},
+                    "params": {"time_generated": "2026-11-18T08:00:00Z"}}
+            return self._json(body)
+        if url.path == "/fp":
+            if q.get("set") in ("filed", "none", "prefiled"):
+                fp_status[0] = q["set"]
+            return self._json({"status": fp_status[0]})
+        if url.path == "/push":
+            queue.append(f"{{{q.get('from', 'EGGX')} cpdlc {{/data2/{nxt()}//WU/{q.get('text', 'CLIMB TO AND MAINTAIN @FL390@')}}}}}")
+            return self._json({"ok": True})
+        self.send_response(404)
+        self.end_headers()
+
+    def _json(self, obj):
+        import json
+        data = json.dumps(obj).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)

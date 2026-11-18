@@ -514,4 +514,4 @@ input.dim { opacity: .4; }
 .vp-sb.differ b { color: var(--amber); }
 .vp-sb-ref { border: 0; background: transparent; color: var(--muted); padding: 3px; margin-left: 4px; border-radius: 6px; cursor: pointer; display: inline-flex; }
 .vp-sb-ref:hover { background: var(--surface-2); }
-.vp-sb-ref.spinning svg { animation: spin .8s linear infinite; }
+.vp-sb-ref.spinning svg { animation: spin .8s linear infinite; }.vp-who .fp-warn.ok { background: var(--mint-soft); color: var(--mint); }

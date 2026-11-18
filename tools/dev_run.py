@@ -37,6 +37,27 @@ import mock_hoppie  # noqa: E402
 import clearway_app  # noqa: E402
 
 threading.Thread(target=ThreadingHTTPServer(("127.0.0.1", 8790), mock_hoppie.H).serve_forever, daemon=True).start()
+
+# SimBrief comes from the mock server (no real account); the flight plan status too when CLEARWAY_FAKE_FP=1
+# (switch it with http://127.0.0.1:8790/fp?set=filed / none), so the vPilot "FP status" warning can be shown.
+import time  # noqa: E402
+import urllib.request as _ur  # noqa: E402
+from clearway import selcal as _selcal  # noqa: E402
+_selcal.SIMBRIEF_URL = "http://127.0.0.1:8790/simbrief"
+if os.environ.get("CLEARWAY_FAKE_FP") == "1":
+    def _fake_fp_loop(self):
+        while True:
+            time.sleep(1)
+            on = self.vpilot_connected and self.vpilot_active() and not self.vpilot_observer
+            try:
+                status = json.loads(_ur.urlopen("http://127.0.0.1:8790/fp", timeout=3).read())["status"] if on else None
+            except Exception:
+                continue
+            if status != self.fp_status:
+                with self.lock:
+                    self.fp_status = status
+                    self._bump()
+    _selcal.SelcalMixin._fp_loop = _fake_fp_loop
 if "--tray" not in sys.argv:
     sys.argv.append("--console")
 clearway_app.main()

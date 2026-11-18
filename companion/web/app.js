@@ -230,7 +230,7 @@
     $("setVpAll").checked = st.vpilot_all_frequency;
     $("setKeys").checked = st.panel_capture_keys;
     const vp = s.vpilot || {};
-    $("vpStatus").textContent = !vp.active ? "Plugin not detected. Install it and restart vPilot."
+    $("vpStatus").textContent = !vp.active ? "vPilot not opened / plugin not found. Start vPilot, with the plugin installed."
       : vp.connected ? `Plugin running · vPilot connected as ${vp.callsign}` : "Plugin running · vPilot not connected to VATSIM";
     $("vpDot").className = "dot " + (!vp.active ? "" : vp.connected ? "online" : "connecting");
     $("vtextNote").textContent = vp.active && vp.connected ? `As ${vp.callsign}` : "vPilot offline";

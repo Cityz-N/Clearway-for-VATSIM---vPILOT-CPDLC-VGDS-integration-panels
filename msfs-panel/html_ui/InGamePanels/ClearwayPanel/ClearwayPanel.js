@@ -36,6 +36,8 @@
   var ackPending = {};
   var atcOpenRows = {};    // controllers whose information is expanded
   var com = null;          // COM radios read from the sim
+  var xpdr = null;         // the aircraft's transponder state in the sim (see simTransponder)
+  var lastModecN = null, lastIdentN = null;   // Clearway's Mode C / ident request counters (see renderVpilot)
   var comSentAt = 0, comSentKey = "";
   var hintTimers = {};
 
@@ -79,12 +81,13 @@
 
   // Pause button: no flashing / colour / counters on the icon. Clearway then stops muting the phone.
   var paused = false;
+  var introUntil = 0;          // the icon stays fully visible until then (first 10 s after the panel starts)
   function setPaused(on) {
     paused = !!on;
     save("CLEARWAY_PAUSED", paused);
     var b = el("cw-pause");
     b.classList.toggle("paused", paused);
-    b.title = paused ? "Notifications paused: click to resume" : "Pause panel notifications";
+    b.title = paused ? "Notifications muted: click to turn them back on" : "Mute panel notifications";
     if (state) render();
     poll(true);
   }
@@ -107,10 +110,12 @@
     if (typeof SimVar === "undefined") return;
     try {
       var f = function (v) { var n = SimVar.GetSimVarValue(v, "MHz"); return n ? n.toFixed(3) : ""; };
+      var b = function (v) { return !!SimVar.GetSimVarValue(v, "Bool"); };
       com = {
-        com1: f("COM ACTIVE FREQUENCY:1"), com1_stby: f("COM STANDBY FREQUENCY:1"), com1_tx: !!SimVar.GetSimVarValue("COM TRANSMIT:1", "Bool"),
-        com2: f("COM ACTIVE FREQUENCY:2"), com2_stby: f("COM STANDBY FREQUENCY:2"), com2_tx: !!SimVar.GetSimVarValue("COM TRANSMIT:2", "Bool")
+        com1: f("COM ACTIVE FREQUENCY:1"), com1_stby: f("COM STANDBY FREQUENCY:1"), com1_tx: b("COM TRANSMIT:1"), com1_rx: b("COM RECEIVE:1"),
+        com2: f("COM ACTIVE FREQUENCY:2"), com2_stby: f("COM STANDBY FREQUENCY:2"), com2_tx: b("COM TRANSMIT:2"), com2_rx: b("COM RECEIVE:2")
       };
+      xpdr = SimVar.GetSimVarValue("TRANSPONDER STATE:1", "Enum");
     } catch (e) { return; }
     var key = JSON.stringify(com), now = Date.now();
     if (reachable && (key !== comSentKey || now - comSentAt > 5000)) {   // share with Clearway (phone)
@@ -118,6 +123,16 @@
       request("POST", "/api/com", com, null);
     }
     updateFreqChip();
+  }
+
+  // The aircraft's transponder in the sim: 0 off, 1 standby, 2 test, 3 on, 4 altitude (= Mode C)
+  function simTransponder(state) {
+    if (typeof SimVar === "undefined") return;
+    try { SimVar.SetSimVarValue("TRANSPONDER STATE:1", "Enum", state); } catch (e) { /* aircraft without one */ }
+  }
+  function simIdent() {
+    if (typeof SimVar === "undefined") return;
+    try { SimVar.SetSimVarValue("K:XPNDR_IDENT_ON", "number", 1); } catch (e) { /* ignore */ }
   }
 
   function txFreq() {
@@ -141,7 +156,9 @@
     var row = function (n) {
       return "<div class=\"cw-com-row\"><b>COM" + n + "</b><span class=\"cw-freq\">" + (com["com" + n] || "---.---") + "</span>" +
         "<span class=\"cw-com-stby\">stby " + (com["com" + n + "_stby"] || "---.---") + "</span>" +
-        (com["com" + n + "_tx"] ? "<span class=\"cw-com-tx\">TX</span>" : "") + "</div>";
+        // TX = transmitting on this radio, RX = listening to it (each shown when on, greyed when off)
+        "<span class=\"cw-com-tx" + (com["com" + n + "_tx"] ? "" : " off") + "\">TX</span>" +
+        "<span class=\"cw-com-tx rx" + (com["com" + n + "_rx"] ? "" : " off") + "\">RX</span></div>";
     };
     pop.innerHTML = row(1) + row(2);
   }
@@ -214,13 +231,11 @@
       bubble.classList.add("paused");
       if (!expanded) bubble.classList.add("idle");
     } else {
-      if (!vpCount && !cpCount && !expanded) bubble.classList.add("idle");   // nearly invisible until needed
-      if (cpCount > 0) bubble.classList.add("alert");          // CPDLC waiting: amber
-      else if (vpCount > 0) bubble.classList.add("alert-vp");   // only vPilot waiting: cyan
-      if (vpCount > lastVp || cpCount > lastCp) {
-        bubble.classList.add(cpCount > lastCp ? "flash" : "flash-vp");
-        setTimeout(function () { el("cw-bubble").classList.remove("flash"); el("cw-bubble").classList.remove("flash-vp"); }, 2900);
-      }
+      // first seconds after the panel opens: fully visible so it's easy to find, then the usual faint icon
+      if (!vpCount && !cpCount && !expanded && Date.now() >= introUntil) bubble.classList.add("idle");   // nearly invisible until needed
+      // a new message simply turns the icon solid (no flashing): amber for CPDLC, cyan for vPilot only
+      if (cpCount > 0) bubble.classList.add("alert");
+      else if (vpCount > 0) bubble.classList.add("alert-vp");
     }
     lastVp = vpCount; lastCp = cpCount;
     setDot("cw-ndot-vp", paused ? 0 : vpCount); setDot("cw-ndot-cp", paused ? 0 : cpCount);
@@ -300,19 +315,34 @@
   function renderVpilot() {
     var vp = (state && reachable && state.vpilot) || {};
     el("cw-vp-dot").className = "cw-dot " + (!vp.active ? "" : vp.connected ? "online" : "connecting");
-    el("cw-vp-cs").textContent = !reachable ? "Clearway not running" : !vp.active ? "vPilot plugin not found" :
+    el("cw-vp-cs").textContent = !reachable ? "Clearway not running" : !vp.active ? "vPilot not opened / plugin not found" :
       vp.connected ? vp.callsign + (vp.observer ? " (observer)" : "") : "vPilot offline";
-    // connected, but VATSIM has no flight plan for this callsign (or only a prefile)
-    var fpWarn = el("cw-fp-warn");
-    fpWarn.classList.toggle("hidden", !(vp.connected && !vp.observer && (vp.fp_status === "none" || vp.fp_status === "prefiled")));
-    fpWarn.title = vp.fp_status === "prefiled" ? "Only a prefile on VATSIM: the flight plan isn't active for this connection"
+    // flight plan on VATSIM for this callsign: green tick filed, red cross not filed (or only a prefile).
+    // Hidden until VATSIM's data has your callsign (fp_status null), and for observers.
+    var fpWarn = el("cw-fp-warn"), fpShow = !!(vp.connected && !vp.observer && vp.fp_status), fpOk = vp.fp_status === "filed";
+    fpWarn.className = "cw-fp-warn" + (fpShow ? "" : " hidden") + (fpOk ? " ok" : "");
+    fpWarn.innerHTML = "FP status" + (fpOk ? TICK_ICON : X_ICON);
+    fpWarn.title = fpOk ? "Flight plan filed on VATSIM for " + (vp.callsign || "this callsign")
+      : vp.fp_status === "prefiled" ? "Only a prefile on VATSIM: the flight plan isn't active for this connection"
       : "No flight plan filed on VATSIM for " + (vp.callsign || "this callsign");
     var conn = el("cw-vp-conn");
     conn.textContent = vp.connected ? "Disconnect" : "Connect";
     conn.classList.toggle("danger", !!vp.connected);
     conn.classList.toggle("disabled", !vp.active);
-    el("cw-vp-sby").classList.toggle("on", vp.modec === false);
-    el("cw-vp-c").classList.toggle("on", vp.modec === true);
+    // Mode C / standby / ident asked from anywhere (phone, dot command, these buttons): set the aircraft's
+    // transponder in the sim too, since vPilot follows it. The first state seen is only remembered.
+    if (typeof vp.modec_n === "number") {
+      if (lastModecN !== null && vp.modec_n !== lastModecN && typeof vp.modec_req === "boolean") simTransponder(vp.modec_req ? 4 : 1);
+      lastModecN = vp.modec_n;
+    }
+    if (typeof vp.ident_n === "number") {
+      if (lastIdentN !== null && vp.ident_n !== lastIdentN) simIdent();
+      lastIdentN = vp.ident_n;
+    }
+    // in the sim, the buttons show the aircraft's real transponder (what vPilot sends); elsewhere the last command
+    var modeC = typeof xpdr === "number" && !isNaN(xpdr) ? xpdr >= 3 : vp.modec;
+    el("cw-vp-sby").classList.toggle("on", modeC === false);
+    el("cw-vp-c").classList.toggle("on", modeC === true);
     ["cw-vp-sby", "cw-vp-c", "cw-vp-id"].forEach(function (id) { el(id).classList.toggle("disabled", !vp.connected || !!vp.observer); });
     if (vp.connected) {
       el("cw-vp-connect").classList.add("hidden");
@@ -321,27 +351,34 @@
     var last = vp.last || {}, f = (state && state.flight) || {};
     prefillInput("cw-vp-cs-in", last.callsign || (state && state.callsign));
     prefillInput("cw-vp-type-in", last.type || f.aircraft);
-    prefillInput("cw-vp-selcal-in", last.selcal);
+    prefillInput("cw-vp-selcal-in", last.selcal ? fmtSelcal(last.selcal) : "");
     if (observerTick === null && state && state.vpilot) setObserverTick(!!last.observer);   // last choice
     renderVpSimbrief();
 
     var chats = chatList(), found = false, html = "";
     for (var i = 0; i < chats.length; i++) if (chats[i].name === activeChat) found = true;
     if (!found) activeChat = "FREQ";
-    for (var j = 0; j < chats.length; j++) {
-      var c = chats[j];
-      html += "<div class=\"cw-chip-tab" + (c.name === activeChat && !atcOpen ? " on" : "") + "\" data-chat=\"" + esc(c.name) + "\">" +
+    // ATC on the left (its count stands out when controllers are online), private chats, frequency on the right
+    var n = vp.controllers ? vp.controllers.length : 0;
+    html += "<div class=\"cw-chip-tab atc" + (atcOpen ? " on" : "") + (n ? " has" : "") + "\" data-atc-toggle=\"1\">ATC" +
+      (n ? "<span class=\"cw-atc-n\">" + n + "</span>" : "") + "</div>";
+    var chip = function (c) {
+      return "<div class=\"cw-chip-tab" + (c.name === "FREQ" ? " freq" : "") + (c.name === activeChat && !atcOpen ? " on" : "") + "\" data-chat=\"" + esc(c.name) + "\">" +
         (c.name === "FREQ" ? "FREQ<span class=\"cw-chip-freq\">" + (txFreq() ? " " + txFreq() : "") + "</span>" : esc(c.name)) +
         (c.unread && (c.name !== activeChat || atcOpen) ? "<span class=\"cw-tdot vp\">" + c.unread + "</span>" : "") +
         (c.name !== "FREQ" ? "<span class=\"cw-chip-x\" data-closechat=\"" + esc(c.name) + "\">" + X_ICON + "</span>" : "") + "</div>";
-    }
-    var n = vp.controllers ? vp.controllers.length : 0;
-    html += "<div class=\"cw-chip-tab atc" + (atcOpen ? " on" : "") + "\" data-atc-toggle=\"1\">ATC" + (n ? " " + n : "") + "</div>";
+    };
+    for (var j = 0; j < chats.length; j++) if (chats[j].name !== "FREQ") html += chip(chats[j]);
+    for (var j2 = 0; j2 < chats.length; j2++) if (chats[j2].name === "FREQ") html += chip(chats[j2]);
     el("cw-vp-chips").innerHTML = html;
 
     el("cw-vp-chat").classList.toggle("hidden", atcOpen);
     el("cw-vp-atc").classList.toggle("hidden", !atcOpen);
-    el("cw-vp-input").placeholder = activeChat === "FREQ" ? "Message, or a .command" : "To " + activeChat + ", or a .command";
+    // observers can't transmit on the frequency: only dot commands there, text goes in private chats
+    var obsFreq = !!(vp.connected && vp.observer && activeChat === "FREQ");
+    el("cw-vp-input").placeholder = obsFreq ? "Observer: private messages only (or a .command)"
+      : activeChat === "FREQ" ? "Message, or a .command" : "To " + activeChat + ", or a .command";
+    el("cw-vp-send").classList.toggle("disabled", obsFreq && !/^\s*\./.test(el("cw-vp-input").value));
     if (atcOpen) renderAtc(vp); else renderChat();
 
     // reading the chat on screen marks it read
@@ -446,6 +483,10 @@
     var input = el("cw-vp-input");
     var text = input.value.replace(/\s+/g, " ").trim();   // vPilot messages are one line
     if (!text) return;
+    var vpS = (state && state.vpilot) || {};
+    if (vpS.connected && vpS.observer && activeChat === "FREQ" && text.charAt(0) !== ".") {
+      return hint("Observers can't transmit on the frequency: open a private chat (ATC list > Chat, or .chat CALLSIGN).", true, "cw-vp-hint");
+    }
     act("vp/command", { text: text, chat: activeChat }, "", "cw-vp-hint", function (ok, data) {
       if (!ok) return;
       input.value = "";
@@ -458,7 +499,37 @@
   }
 
   // ------------------------------------------------------------ render: CPDLC
+  // Hoppie: green tick when Clearway is connected to Hoppie with your code, red cross otherwise (no code, wrong
+  // code, offline). Click to type or paste the code (hidden field).
+  var hopOpen = false;
+  function renderHoppie() {
+    var set = !!(state && state.settings && state.settings.hoppie_logon_set);
+    var ok = !!(state && reachable && set && state.status === "online" && !state.error);
+    var b = el("cw-hop");
+    b.className = "cw-hop " + (ok ? "ok" : "bad") + (hopOpen ? " open" : "");
+    el("cw-hop-ic").innerHTML = ok ? TICK_ICON : X_ICON;
+    b.title = !reachable ? "Clearway not running" : !set ? "No Hoppie logon code yet: click to enter it"
+      : ok ? "Connected to Hoppie (click to change the code)" : "Not connected to Hoppie" + (state && state.error ? ": " + plain(state.error) : "") + " (click to change the code)";
+    el("cw-hop-row").classList.toggle("hidden", !hopOpen);
+  }
+  function saveHoppie() {
+    var code = el("cw-hop-in").value.trim();
+    if (!code) return hint("Type or paste your Hoppie logon code.", true, "cw-hop-hint");
+    act("settings", { hoppie_logon: code }, "", "cw-hop-hint", function (ok) {
+      if (!ok) return;
+      el("cw-hop-in").value = "";
+      releaseKeyboard();
+      hopOpen = false;
+      var on = state && (state.status === "online" || state.status === "connecting");
+      // reconnect with the new code
+      if (on) act("disconnect", {}, null, null, function () { act("connect", {}, null); });
+      else act("connect", {}, null);
+      renderHoppie(); placeCard();
+    });
+  }
+
   function renderCpdlc() {
+    renderHoppie();
     var dot = el("cw-dot");
     dot.className = "cw-dot " + (state && reachable ? (state.status === "online" && state.error ? "connecting" : state.status) : "");
     el("cw-callsign").textContent = state && state.callsign && reachable ? state.callsign : "CPDLC";
@@ -719,12 +790,12 @@
     var feed = el("cw-sc-feed");
     if (!sc) { feed.textContent = reachable ? "" : "Clearway not running"; feed.className = "cw-sc-feed err"; return; }
     var v = sc.vatsim || {};
-    feed.textContent = v.checked ? "VATSIM " + v.count : (v.error || "VATSIM not checked yet");
-    feed.title = v.checked ? v.count + " VATSIM flight plans checked" : "";
+    feed.textContent = v.error || "";            // only a problem is worth showing (the count of plans checked was noise)
+    feed.title = v.checked ? v.count + " VATSIM flight plans checked" : "";   // still there on hover
     feed.className = "cw-sc-feed" + (v.checked ? " ok" : v.error ? " err" : "");
     // SimBrief: the saved username sits in the bar; click it to change it
     var name = el("cw-sc-sbname");
-    name.textContent = sc.simbrief_user || "";
+    name.textContent = sc.simbrief_user ? "******" : "";          // kept private on screen
     name.classList.toggle("hidden", !sc.simbrief_user);
     name.classList.toggle("on", scUserOpen);
     el("cw-sc-sbuser").classList.toggle("hidden", !scUserOpen);
@@ -785,6 +856,12 @@
   function scGenerate() {
     act("selcal/generate", { callsign: scCallsign() }, "", "cw-sc-hint");
   }
+  // SELCAL always written AB-CD: the dash appears by itself after the second tone
+  function fmtSelcal(v) {
+    var s = String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    return s.length > 2 ? s.slice(0, 2) + "-" + s.slice(2) : s;
+  }
+
   // vPilot connect form: small availability line under the SELCAL field
   var vpScTimer = null, vpScSeq = 0;
   function vpSelcalCheck(delay) {
@@ -840,7 +917,7 @@
   function scUseInVpilot(code) {
     act("selcal/use", { code: code }, "", "cw-sc-hint", function (ok, data) {
       if (!ok) return;
-      el("cw-vp-selcal-in").value = (data.code || code).replace("-", "");
+      el("cw-vp-selcal-in").value = fmtSelcal(data.code || code);
       vpSelcalCheck(0);
       hint(data.code + " is set in the vPilot connect form", false, "cw-sc-hint");
     });
@@ -1438,8 +1515,22 @@
     return p;
   }
 
+  // Tab / Shift+Tab: the next / previous text box on screen in the card (wraps around)
+  function focusNext(from, back) {
+    var all = document.querySelectorAll("#cw-card input, #cw-card textarea"), list = [], i;
+    for (i = 0; i < all.length; i++) {
+      var f = all[i];
+      if (f.type !== "checkbox" && !f.disabled && (f.offsetWidth || f.offsetHeight) && !up(f, ".hidden")) list.push(f);
+    }
+    if (!list.length) return;
+    var at = list.indexOf(from);
+    var next = list[((at < 0 ? -1 : at) + (back ? -1 : 1) + list.length) % list.length];
+    if (next && next !== from) { next.focus(); try { next.setSelectionRange(0, next.value.length); } catch (e) { /* ignore */ } }
+  }
+
   function applyKey(ev) {
     if (ev.t === "key" && ev.k === "Escape") { releaseKeyboard(); return; }
+    if (ev.t === "key" && ev.k === "Tab") { var cur = keyboardOwner ? el(keyboardOwner) : null; if (cur) focusNext(cur, ev.shift); return; }
     var input = keyboardOwner ? el(keyboardOwner) : null;
     if (!input || document.activeElement !== input) return;
     armIdleBlur();
@@ -1499,6 +1590,11 @@
     var lastEnter = 0;
     function onKey(e) {
       if (e.key === "Escape" || e.keyCode === 27) { releaseKeyboard(); e.stopPropagation(); return; }
+      if (e.key === "Tab" || e.keyCode === 9) {
+        e.preventDefault(); e.stopPropagation();
+        if (e.type === "keydown") focusNext(input, e.shiftKey);
+        return;
+      }
       armIdleBlur();
       var isEnter = e.key === "Enter" || e.keyCode === 13 || e.which === 13;
       if (isEnter && !e.shiftKey && onEnter) {
@@ -1535,6 +1631,9 @@
       if (e.button === 2) { e.preventDefault(); e.stopPropagation(); peek(); }
     });
     el("cw-bubble").addEventListener("contextmenu", function (e) { e.preventDefault(); peek(); });
+    // MSFS 2024 sends the panel only the release of a right click (no mousedown, no contextmenu): peek on it too.
+    // peek() ignores a second call within 350 ms, so a sim that sends both still peeks once.
+    el("cw-bubble").addEventListener("mouseup", function (e) { if (e.button === 2) { e.preventDefault(); peek(); } });
     el("cw-peek").addEventListener("click", onPeekClick);
     el("cw-peek").addEventListener("mouseover", function () { peekHover = true; clearTimeout(peekTimer); });
     el("cw-peek").addEventListener("mouseout", function (e) {
@@ -1548,7 +1647,7 @@
     el("cw-lock").addEventListener("click", toggleLock);
     paused = !!load("CLEARWAY_PAUSED", false);
     el("cw-pause").classList.toggle("paused", paused);
-    el("cw-pause").title = paused ? "Notifications paused: click to resume" : "Pause panel notifications";
+    el("cw-pause").title = paused ? "Notifications muted: click to turn them back on" : "Mute panel notifications";
     el("cw-pause").addEventListener("click", function () { setPaused(!paused); });
     clockMode = load("CLEARWAY_CLOCK", "utc");
     if (CLOCK_MODES.indexOf(clockMode) < 0) clockMode = "utc";
@@ -1591,7 +1690,7 @@
     // vPilot controls
     el("cw-vp-conn").addEventListener("click", function () {
       var vp = (state && state.vpilot) || {};
-      if (!vp.active) return hint("Install the Clearway plugin in vPilot first.", true, "cw-vp-hint");
+      if (!vp.active) return hint("vPilot not opened / plugin not found: start vPilot (with the Clearway plugin installed).", true, "cw-vp-hint");
       if (vp.connected) return act("vp/disconnect", {}, "Disconnecting...", "cw-vp-hint");
       el("cw-vp-connect").classList.toggle("hidden");
       vpSelcalCheck(0);
@@ -1609,12 +1708,17 @@
       vpSelcalCheck(0);
     });
     el("cw-vp-cs-in").addEventListener("input", renderVpSimbrief);
-    el("cw-vp-selcal-in").addEventListener("input", function () { vpSelcalCheck(); });
+    el("cw-vp-selcal-in").addEventListener("input", function () {
+      var i = el("cw-vp-selcal-in"), f = fmtSelcal(i.value);
+      if (f !== i.value) { i.value = f; try { i.setSelectionRange(f.length, f.length); } catch (e) { /* ignore */ } }
+      vpSelcalCheck();
+    });
     el("cw-vp-connect-go").addEventListener("click", function () {
       act("vp/connect", { callsign: el("cw-vp-cs-in").value, type_code: el("cw-vp-type-in").value, selcal: el("cw-vp-selcal-in").value,
         observer: !!observerTick }, observerTick ? "Connecting as observer..." : "Connecting...", "cw-vp-hint");
     });
     el("cw-vp-obs").addEventListener("click", function () { setObserverTick(!observerTick); });
+    // the aircraft's transponder in the sim is set from renderVpilot (Clearway counts each request), see simTransponder
     el("cw-vp-sby").addEventListener("click", function () { act("vp/modec", { on: false }, "Standby", "cw-vp-hint"); });
     el("cw-vp-c").addEventListener("click", function () { act("vp/modec", { on: true }, "Mode C", "cw-vp-hint"); });
     el("cw-vp-id").addEventListener("click", function () {
@@ -1649,6 +1753,13 @@
 
     // CPDLC controls
     el("cw-clear").addEventListener("click", function () { act("clear", {}, null); });
+    el("cw-hop").addEventListener("click", function () {
+      hopOpen = !hopOpen;
+      renderHoppie(); placeCard();
+      if (hopOpen) el("cw-hop-in").focus(); else releaseKeyboard();
+    });
+    el("cw-hop-go").addEventListener("click", saveHoppie);
+    wireInput(el("cw-hop-in"), saveHoppie);
     el("cw-req-toggle").addEventListener("click", function () {
       reqOpen = !reqOpen;
       el("cw-req").classList.toggle("hidden", !reqOpen);
@@ -1721,6 +1832,8 @@
     var atcParam = /[?&]atc=([A-Z0-9_]+)/i.exec(window.location.search || "");
     if (atcParam) { atcOpen = true; setTimeout(function () { toggleAtc(atcParam[1].toUpperCase()); }, 600); }
 
+    introUntil = Date.now() + 10000;
+    setTimeout(render, 10100);   // back to the faint icon after the first 10 s
     render();
     poll(true);
     setInterval(function () { poll(false); }, POLL_MS);

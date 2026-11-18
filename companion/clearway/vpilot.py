@@ -215,6 +215,8 @@ class VpilotMixin:
             raise ValueError("Empty message.")
         if kind == "pm" and not to:
             raise ValueError("Enter who the message is for (a callsign).")
+        if kind != "pm" and self.vpilot_observer and self.vpilot_connected:
+            raise ValueError("Observers can't transmit on the frequency: send a private message instead.")
         with self.lock:
             me = self.vpilot_callsign or "YOU"
             msg = self._add("out", kind, to if kind == "pm" else me, text, status="sending",
@@ -231,6 +233,9 @@ class VpilotMixin:
         if self.vpilot_connected:
             raise ValueError("vPilot is already connected.")
         callsign, type_code, selcal = callsign.strip().upper(), type_code.strip().upper(), selcal.strip().upper()
+        tones = "".join(ch for ch in selcal if ch.isalnum())
+        if len(tones) == 4:
+            selcal = tones[:2] + "-" + tones[2:]          # always AB-CD, like vPilot's own connect window
         if not callsign:
             raise ValueError("Enter a callsign.")
         if not observer and not type_code:
@@ -250,11 +255,18 @@ class VpilotMixin:
         self._queue("modec", label="Mode C" if on else "Standby", on=bool(on))
         with self.lock:
             self.vp_modec = bool(on)
+            # counted, so the MSFS panel also sets the aircraft's transponder (vPilot follows the sim's), even
+            # when the request came from the phone
+            self.vp_modec_n = getattr(self, "vp_modec_n", 0) + 1
+            self.vp_modec_req = bool(on)           # what was asked (vp_modec can be reset by vPilot events)
             self._bump()
 
     def vpilot_ident(self) -> None:
         self._require_vpilot()
         self._queue("ident", label="Ident")
+        with self.lock:
+            self.vp_ident_n = getattr(self, "vp_ident_n", 0) + 1
+            self._bump()
         self._system("Ident sent.", vp=True)
 
     def vpilot_atis(self, callsign: str, quiet: bool = False) -> None:
@@ -401,6 +413,9 @@ class VpilotMixin:
             "callsign": self.vpilot_callsign if self.vpilot_active() else "",
             "observer": self.vpilot_observer and self.vpilot_connected and self.vpilot_active(),
             "modec": self.vp_modec,
+            "modec_n": getattr(self, "vp_modec_n", 0),
+            "modec_req": getattr(self, "vp_modec_req", None),
+            "ident_n": getattr(self, "vp_ident_n", 0),
             "com": ({k: v for k, v in self.com.items() if k != "ts"}
                     if self.com and time.time() - self.com["ts"] < 15 else None),
             "controllers": ctrls,

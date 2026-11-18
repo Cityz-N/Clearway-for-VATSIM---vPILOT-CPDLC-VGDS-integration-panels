@@ -333,7 +333,7 @@ class SelcalMixin:
         c = parse_code(code)
         if not c or any(t in EXT_NEW for t in c.replace("-", "")):
             raise ValueError("vPilot takes a standard 16-tone code (A-S).")
-        self.cfg.update({"vpilot_selcal": c.replace("-", "")})
+        self.cfg.update({"vpilot_selcal": c})
         with self.lock:
             self._bump()
         return c

@@ -582,7 +582,7 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 #cw-pause.paused { background-color: var(--amber-soft); }
 #cw-pause.paused svg { stroke: var(--amber); }
 #cw-pause.paused .cw-i-pause { display: none; }
-#cw-pause.paused .cw-i-play { display: inline; fill: var(--amber); stroke-linejoin: round; }
+#cw-pause.paused .cw-i-play { display: inline; }
 .cw-pause-mark {
   display: none; position: absolute; right: -0.25em; bottom: -0.25em; width: 1.15em; height: 1.15em; border-radius: 50%;
   background-color: var(--amber); border: 1px solid rgba(0, 0, 0, 0.25);
@@ -647,3 +647,35 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
               transparent 70%, rgba(143, 211, 255, 0.55) 70%, rgba(143, 211, 255, 0.55) 80%, transparent 80%);
 }
 .cw-tabs { min-width: 0; overflow: hidden; }   /* very long counters clip the tabs, never the buttons */
+
+/* ---------------- 1.0.0 tweaks ---------------- */
+/* muted mark on the floating icon: an amber disc with a slash (instead of pause bars) */
+.cw-pause-mark:after { display: none; }
+.cw-pause-mark:before { left: 0.5em; top: 0.18em; width: 0.13em; height: 0.78em; transform: rotate(45deg); }
+/* first 10 s after the panel starts: fully visible so it's easy to find *//* vPilot chips: ATC on the left, frequency on the right */
+.cw-chip-tab.atc { margin-left: 0; }
+.cw-chip-tab.freq { margin-left: auto; }
+.cw-atc-n { margin-left: 0.35em; padding: 0 0.4em; border-radius: 0.6em; background-color: var(--vp); color: #032423; font-size: 0.9em; }
+.cw-chip-tab.atc.has { color: var(--text); }
+/* radio popover: TX and RX badges, greyed when off */
+.cw-com-tx { margin-left: 0.45em; }
+.cw-com-tx.rx { background-color: var(--accent-soft); color: var(--accent); }
+.cw-com-tx.off { background-color: transparent; color: var(--glyph-off); font-weight: normal; }/* stacking: no z-index on the card, the icon or the radar window. Giving the card its own layer made MSFS 2024
+   leave stale copies of it on screen when it changed size (deleted messages, request form). The page order
+   already puts the detached radar window under the card; the radar's own layers stay inside #rd-radar. */#cw-capture { z-index: 10; }   /* while dragging it must cover everything, the card included */
+/* Hoppie status in the CPDLC bar: green tick connected, red cross not */
+.cw-hop { display: flex; align-items: center; margin-left: 0.35em; padding: 0.25em 0.55em; border-radius: 0.5em; cursor: pointer;
+  font-size: 0.78em; font-weight: bold; background-color: var(--surface-2); color: var(--muted); }
+.cw-hop-ic { display: flex; margin-left: 0.35em; }
+.cw-hop-ic svg { width: 0.95em; height: 0.95em; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.cw-hop.ok { color: var(--mint); } .cw-hop.ok svg { stroke: var(--mint); }
+.cw-hop.bad { color: var(--rose); } .cw-hop.bad svg { stroke: var(--rose); }
+.cw-hop.open { background-color: var(--accent-soft); }
+.cw-hop-row { padding: 0.55em 0.8em 0.4em; background-color: var(--surface); border-bottom: 1px solid var(--line); }
+.cw-hop-row .cw-btn.primary { margin: 0 0 0 0.45em; }
+/* hidden fields (logon code, SimBrief ID) keep their letters' case */
+.cw-input.cw-secret { text-transform: none; letter-spacing: 0.1em; }/* FP status badge: red with a cross (not filed), green with a tick (filed) */
+.cw-fp-warn { display: inline-flex; align-items: center; }
+.cw-fp-warn svg { width: 0.95em; height: 0.95em; margin-left: 0.3em; fill: none; stroke: var(--rose); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.cw-fp-warn.ok { background-color: var(--mint-soft); color: var(--mint); }
+.cw-fp-warn.ok svg { stroke: var(--mint); }

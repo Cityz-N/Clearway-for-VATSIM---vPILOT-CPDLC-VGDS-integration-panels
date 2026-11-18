@@ -21,6 +21,11 @@ def call(path, body=None):
 
 
 def main():
+    call("settings", {"simbrief_user": "demo"})        # SimBrief comes from the mock server (tools/dev_run.py)
+    try:                                               # flight plan filed (with CLEARWAY_FAKE_FP=1): no FP warning
+        urllib.request.urlopen("http://127.0.0.1:8790/fp?set=filed", timeout=5).read()
+    except OSError:
+        pass
     call("com", {"com1": "118.500", "com1_stby": "121.975", "com1_tx": True,
                  "com2": "121.500", "com2_stby": "122.800", "com2_tx": False})
     call("connect", {})

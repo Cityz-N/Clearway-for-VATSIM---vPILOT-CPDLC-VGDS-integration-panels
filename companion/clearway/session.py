@@ -59,6 +59,7 @@ class Session(VpilotMixin, SelcalMixin):
         self.flight: dict = {}
         self.current_unit: str | None = None
         self.pending_logon: str | None = None
+        self.pending_since = 0.0               # when the pending logon was sent (cancelled after LOGON_TIMEOUT)
         self.last_poll = 0.0
         self.next_poll = 0.0
         self.contracts: dict[str, dict] = {}   # station -> {interval, next_due}
@@ -222,6 +223,7 @@ class Session(VpilotMixin, SelcalMixin):
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
             self._poll_once()
+            self._check_logon_timeout()
             fast = time.time() < self.fast_until
             delay = 20 if fast else random.uniform(45, 75)
             with self.lock:
@@ -229,6 +231,17 @@ class Session(VpilotMixin, SelcalMixin):
                 self._bump()
             self._wake.clear()
             self._wake.wait(delay)
+
+    LOGON_TIMEOUT = 600   # a logon request still unanswered after 10 minutes is cancelled
+
+    def _check_logon_timeout(self) -> None:
+        with self.lock:
+            station = self.pending_logon
+            if not station or time.time() - self.pending_since < self.LOGON_TIMEOUT:
+                return
+            self.pending_logon = None
+            self._bump()
+        self._system(f"No answer from {station} after 10 minutes: logon request cancelled. Log on again when the station is online.")
 
     def _poll_once(self) -> None:
         with self.lock:
@@ -308,6 +321,7 @@ class Session(VpilotMixin, SelcalMixin):
             with self.lock:
                 self.current_unit = None
                 self.pending_logon = nxt
+                self.pending_since = time.time()
                 self._bump()
             self._system(f"Handover from {item.sender} to {nxt}, logging on…")
             self._send(nxt, "cpdlc", build_cpdlc(self._take_min(), None, "Y", "REQUEST LOGON"))
@@ -558,6 +572,7 @@ class Session(VpilotMixin, SelcalMixin):
             raise ValueError("Enter the ATC station (e.g. EGGX, KZNY, CZQX).")
         with self.lock:
             self.pending_logon = station
+            self.pending_since = time.time()
             self._bump()
         self._expect_reply()
         self._send_logged(station, "cpdlc", build_cpdlc(self._take_min(), None, "Y", "REQUEST LOGON"),

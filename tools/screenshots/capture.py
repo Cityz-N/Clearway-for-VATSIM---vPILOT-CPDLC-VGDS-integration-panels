@@ -106,8 +106,16 @@ def radar_close_up(cdp):
     set_panel_storage(cdp, {"radar.view": view})
     cdp("Page.navigate", url="http://localhost:8791/shots/fs-radar.html")
     time.sleep(8)
+    # click where the plane is now (it has moved since the view was chosen): same projection as radar.js,
+    # one world = 256 * 2^z px, times the page's 1.27 scale, from the map centre at (479.5, 317.7)
+    now = {p[0]: p for p in json.loads(urllib.request.urlopen("http://127.0.0.1:8797/api/radar/traffic", timeout=30).read())["pilots"]}
+    p = now.get(plane[0], plane)
+    s2 = math.sin(math.radians(p[1]))
+    mx, my = (p[2] + 180) / 360, 0.5 - math.log((1 + s2) / (1 - s2)) / (4 * math.pi)
+    k = 256 * 2 ** view["z"] * 1.27
+    cx, cy = 479.5 + (mx - view["x"]) * k, 317.7 + (my - view["y"]) * k
     for t in ("mousePressed", "mouseReleased"):
-        cdp("Input.dispatchMouseEvent", type=t, x=479.5, y=317.7, button="left", clickCount=1)
+        cdp("Input.dispatchMouseEvent", type=t, x=cx, y=cy, button="left", clickCount=1)
     time.sleep(2.5)
     shot = cdp("Page.captureScreenshot", format="png")
     (OUT / "fs-radar.png").write_bytes(base64.b64decode(shot["data"]))

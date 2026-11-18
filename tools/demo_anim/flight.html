@@ -153,23 +153,6 @@ function mouse(e, type, button) {
   var p = centre(e);
   e.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: button || 0, clientX: p.x, clientY: p.y, view: doc.defaultView }));
 }
-function mouseAt(e, p, type) {
-  e.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: p.x, clientY: p.y, view: doc.defaultView }));
-}
-// Screen position of the plane nearest the radar's centre (same projection as radar.js: one world = 256 * 2^z px)
-function planeOnScreen() {
-  return api("radar/traffic").then(function (t) {
-    var v = JSON.parse(localStorage.getItem("radar.view")), r = $("#rd-map").getBoundingClientRect();
-    var ws = 256 * Math.pow(2, v.z), best = null, bd = 1e9;
-    (t.pilots || []).forEach(function (p) {
-      var s = Math.sin(p[1] * Math.PI / 180), mx = (p[2] + 180) / 360, my = 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
-      var x = r.left + r.width / 2 + (mx - v.x) * ws, y = r.top + r.height / 2 + (my - v.y) * ws;
-      var d = Math.pow(x - (r.left + r.width / 2), 2) + Math.pow(y - (r.top + r.height / 2), 2);
-      if (p[3] > 1000 && x > r.left + 60 && x < r.right - 60 && y > r.top + 40 && y < r.bottom - 40 && d < bd) { bd = d; best = { x: x, y: y }; }
-    });
-    return best || { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  });
-}
 function click(e) { ripple(false); mouse(e, "mousedown"); mouse(e, "mouseup"); mouse(e, "click"); return wait(120); }
 function clickBubble(e) { ripple(false); mouse(e, "mousedown"); doc.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })); return wait(120); }
 function rightClick(e) { ripple(true); mouse(e, "mousedown", 2); mouse(e, "contextmenu", 2); return wait(120); }
@@ -192,23 +175,122 @@ function type(e, text, cps) {
 function fill(id, text) { return goClick("#" + id, 380).then(function () { var e = $("#" + id); e.value = ""; return type(e, text, 18); }); }
 function radio(text) { return api("vpilot/event", { type: "radio", from: "EGLL_TWR", message: text, frequencies: "118.500" }); }
 
-// ---- the flight ----
+// ---- stand-in for the sim: your aircraft for the radar (?me=lat,lon from record_demo.py), the radios ----
+var ME = (function () { var m = /[?&]me=(-?[\d.]+),(-?[\d.]+)/.exec(location.search); return m ? { lat: +m[1], lon: +m[2] } : null; })();
+var meT0 = Date.now();
+function installSim(w) {
+  w.SimVar = {
+    GetSimVarValue: function (n) {
+      var dt = (Date.now() - meT0) / 1000;
+      if (ME && n === "PLANE LATITUDE") return ME.lat + dt * 0.0011;            // heading about 315, ~400 kt
+      if (ME && n === "PLANE LONGITUDE") return ME.lon - dt * 0.0013;
+      if (n === "PLANE HEADING DEGREES TRUE") return 315;
+      if (n === "PLANE ALTITUDE") return 34000;
+      if (n === "GROUND VELOCITY") return 420;
+      if (n.indexOf("COM ACTIVE FREQUENCY:1") === 0) return 118.5;
+      if (n.indexOf("COM STANDBY FREQUENCY:1") === 0) return 121.975;
+      if (n.indexOf("COM ACTIVE FREQUENCY:2") === 0) return 121.5;
+      if (n.indexOf("COM STANDBY FREQUENCY:2") === 0) return 122.8;
+      if (n.indexOf("COM TRANSMIT:1") === 0 || n.indexOf("COM RECEIVE:1") === 0) return 1;
+      if (n.indexOf("TRANSPONDER STATE") === 0) return 4;
+      return 0;
+    },
+    SetSimVarValue: function () { return { then: function () {} }; }
+  };
+}
+
+// ---- radar helpers: screen position of a lat/lon (same projection as radar.js) ----
+function project(lat, lon) {
+  var v = JSON.parse(localStorage.getItem("radar.view")), r = $("#rd-map").parentNode.getBoundingClientRect();
+  var s = Math.sin(lat * Math.PI / 180), mx = (lon + 180) / 360, my = 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+  var ws = 256 * Math.pow(2, v.z);
+  return { x: r.left + r.width / 2 + (mx - v.x) * ws, y: r.top + r.height / 2 + (my - v.y) * ws, r: r };
+}
+function inside(p, m) { return p.x > p.r.left + (m || 70) && p.x < p.r.right - (m || 70) && p.y > p.r.top + 50 && p.y < p.r.bottom - 50; }
+function planeOnScreen() {
+  return api("radar/traffic").then(function (t) {
+    var best = null, bd = 1e9;
+    (t.pilots || []).forEach(function (pl) {
+      if (pl[3] < 1000) return;
+      var p = project(pl[1], pl[2]), cx = p.r.left + p.r.width / 2, cy = p.r.top + p.r.height / 2;
+      var d = Math.pow(p.x - cx - 60, 2) + Math.pow(p.y - cy, 2);
+      if (inside(p, 220) && d < bd) { bd = d; best = p; }
+    });
+    return best;
+  });
+}
+function atcOnScreen() {
+  return api("radar/atc").then(function (a) {
+    var best = null, bd = 1e9;
+    (a.airports || []).forEach(function (ap) {
+      if (!ap.c || !ap.c.length) return;
+      var p = project(ap.lat, ap.lon), cx = p.r.left + p.r.width / 2, cy = p.r.top + p.r.height / 2;
+      var d = Math.pow(p.x - cx, 2) + Math.pow(p.y - cy, 2);
+      if (inside(p, 230) && d < bd) { bd = d; best = p; }
+    });
+    return best;
+  });
+}
+// a click on the map: whichever canvas is in front gets the press, the window the release (as radar.js expects)
+function mapClick(p) {
+  if (!p) return wait(300);
+  ripple(false);
+  var t = doc.elementFromPoint(p.x, p.y) || $("#rd-map");
+  t.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0, clientX: p.x, clientY: p.y, view: doc.defaultView }));
+  t.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, button: 0, clientX: p.x, clientY: p.y, view: doc.defaultView }));
+  return wait(150);
+}
+function mockFp(status) { return fetch("http://127.0.0.1:8790/fp?set=" + status, { mode: "no-cors" }).catch(function () {}); }
+
+// ---- the flight, in the order of the tabs: vPilot, CPDLC, SELCAL, Radar ----
 function flight() {
+  var code = "";
   return Promise.resolve()
-    // at the gate: a SELCAL nobody on VATSIM uses, then the datalink clearance
+    // ======== 1. vPilot ========
     .then(function () { return wait(900); })
-    .then(function () { return caption("At the gate in <b>Heathrow</b>: pick a <b>SELCAL</b> no one on VATSIM is using"); })
+    .then(function () { return caption("<b>vPilot</b> in the sim: connect to VATSIM from the panel"); })
     .then(function () { return go("#cw-bubble", 900); })
     .then(function (b) { return clickBubble(b); })
-    .then(function () { return goClick('.cw-tab[data-tab="selcal"]', 700); })
-    .then(function () { return fill("cw-sc-callsign", "BAW117"); })
-    .then(function () { return goClick("#cw-sc-gen", 600); })
-    .then(function () { return wait(1800); })
-    .then(function () { return caption("Checked against every flight plan on VATSIM, then sent to vPilot's connect form"); })
-    .then(function () { return goClick("#cw-sc-use", 700); })
-    .then(function () { return wait(2200); })
-    .then(function () { return caption("Request the departure clearance by <b>CPDLC</b>"); })
-    .then(function () { return goClick('.cw-tab[data-tab="cpdlc"]', 700); })
+    .then(function () { return goClick('.cw-tab[data-tab="vpilot"]', 700); })
+    .then(function () { return wait(600); })
+    .then(function () { return goClick("#cw-vp-conn", 700); })
+    .then(function () { return wait(1600); })                              // your SimBrief plan is fetched
+    .then(function () { return caption("<b>SB:</b> your latest SimBrief callsign, green when what you type matches"); })
+    .then(function () { return fill("cw-vp-cs-in", "BAW117"); })
+    .then(function () { return wait(1400); })
+    .then(function () { return fill("cw-vp-type-in", "B77W"); })
+    .then(function () { return api("selcal/generate", { callsign: "BAW117" }).then(function (r) { code = r.current.std.replace("-", ""); }); })
+    .then(function () { return caption("Your <b>SELCAL</b> is checked on VATSIM as you type"); })
+    .then(function () { return fill("cw-vp-selcal-in", code); })
+    .then(function () { return wait(2800); })
+    .then(function () { return goClick("#cw-vp-connect-go", 700); })
+    .then(function () { return wait(2600); })
+    .then(function () { return caption("Connected, but no flight plan filed yet: <b style=\"color:#ff7d7d\">FP status</b> shows a red cross"); })
+    .then(function () { return go("#cw-fp-warn", 700); })
+    .then(function () { return wait(2600); })
+    .then(function () { return mockFp("filed"); })
+    .then(function () { return caption("Flight plan filed on VATSIM: <b style=\"color:#4fd1a1\">FP status</b> turns green"); })
+    .then(function () { return wait(2800); })
+    .then(function () { return caption("<b>Nearby ATC</b>, with each controller's information"); })
+    .then(function () { return goClick("[data-atc-toggle]", 800); })
+    .then(function () { return wait(700); })
+    .then(function () { return goClick('[data-atc="EGLL_TWR"]', 700); })
+    .then(function () { return wait(1300); })
+    .then(function () { return goClick('[data-atc="LON_S_CTR"]', 700); })
+    .then(function () { return wait(2800); })
+    .then(function () { return caption("The tower calls you on the frequency: answer from the panel"); })
+    .then(function () { return goClick('.cw-chip-tab[data-chat="FREQ"]', 800); })
+    .then(function () { return wait(500); })
+    .then(function () { return radio("BAW117 start-up approved, QNH 1018, call Heathrow Ground 121.900 when ready"); })
+    .then(function () { return wait(2400); })
+    .then(function () { return goClick("#cw-vp-input", 600); })
+    .then(function () { return type($("#cw-vp-input"), "Start-up approved, QNH 1018, BAW117", 17); })
+    .then(function () { return goClick("#cw-vp-send", 500); })
+    .then(function () { return wait(2400); })
+
+    // ======== 2. CPDLC ========
+    .then(function () { return caption("<b>CPDLC</b>: request the departure clearance by datalink"); })
+    .then(function () { return goClick('.cw-tab[data-tab="cpdlc"]', 800); })
     .then(function () { return goClick("#cw-req-toggle"); })
     .then(function () { return goClick('#cw-req-kind2 [data-v="pdc"]'); })
     .then(function () { return fill("cw-f-station", "EGLL"); })
@@ -225,41 +307,9 @@ function flight() {
     .then(function () { return click($("#cw-list .cw-tick")); })
     .then(function () { return wait(900); })
     .then(function () { return goClick("#cw-min", 700); })
-
-    // holding point: vPilot
-    .then(function () { scene("rwy"); return caption("Holding point <b>27R</b>: the tower calls you on the frequency"); })
-    .then(function () { return moveTo({ x: 640, y: 560 }, 800); })
-    .then(function () { return wait(700); })
-    .then(function () { return radio("BAW117 behind the landing A320, line up and wait runway 27R behind"); })
-    .then(function () { return wait(2600); })
-    .then(function () { return caption("<b>Right click</b> the icon to peek at the message"); })
-    .then(function () { return go("#cw-bubble", 800); })
-    .then(function (b) { return rightClick(b); })
-    .then(function () { return wait(2600); })
-    .then(function () { return caption("Click it to open the chat and answer"); })
-    .then(function () { return go("#cw-peek", 500); })
-    .then(function (p) { mouse(p, "mouseover"); return wait(700).then(function () { return click(p); }); })
-    .then(function () { return goClick("#cw-vp-input", 700); })
-    .then(function () { return type($("#cw-vp-input"), "Behind the A320, line up and wait 27R behind, BAW117", 17); })
-    .then(function () { return goClick("#cw-vp-send", 500); })
-    .then(function () { return wait(2200); })
-    .then(function () { return radio("BAW117 wind 250 degrees 9 knots, runway 27R cleared for take-off"); })
-    .then(function () { return wait(1500); })
-    .then(function () { return goClick("#cw-vp-input", 500); })
-    .then(function () { return type($("#cw-vp-input"), "Cleared for take-off 27R, BAW117", 17); })
-    .then(function () { return goClick("#cw-vp-send", 500); })
-    .then(function () { return wait(1500); })
-    .then(function () { return caption("Nearby controllers, ATIS and dot commands are built in"); })
-    .then(function () { return goClick("[data-atc-toggle]", 800); })
-    .then(function () { return wait(600); })
-    .then(function () { return goClick('[data-atc="EGLL_TWR"]', 700); })
-    .then(function () { return wait(3000); })
-    .then(function () { return goClick("#cw-min", 800); })
-
-    // oceanic: CPDLC from Shanwick, answered from the peek
-    .then(function () { scene("cruise"); return caption("Over the Atlantic, logged on to <b>Shanwick</b> (EGGX)"); })
+    .then(function () { scene("cruise"); return caption("En route, logged on to <b>Shanwick</b> (EGGX)"); })
     .then(function () { return moveTo({ x: 700, y: 520 }, 900); })
-    .then(function () { return wait(1200); })
+    .then(function () { return wait(1000); })
     .then(function () {
       return api("logon", { station: "EGGX" }).then(function () { return wait(400); }).then(function () { return api("state?since=0"); })
         .then(function (s) {
@@ -267,33 +317,84 @@ function flight() {
           return Promise.all(acc.map(function (m) { return api("ack", { id: m.id }); }));
         });
     })
-    .then(function () { return caption("A CPDLC clearance: the icon turns <b style=\"color:#f5b14c\">amber</b>"); })
-    .then(function () { return wait(2600); })
-    .then(function () { return caption("Answer it straight from the peek window"); })
+    .then(function () { return caption("A CPDLC clearance: the icon turns <b style=\"color:#f5b14c\">amber</b>. Answer it from the peek window"); })
+    .then(function () { return wait(2400); })
     .then(function () { return go("#cw-bubble", 800); })
     .then(function (b) { return rightClick(b); })
-    .then(function () { return wait(1800); })
+    .then(function () { return wait(1700); })
     .then(function () { return go('#cw-peek [data-peek-reply="WILCO"]', 700); })
     .then(function (w) { mouse($("#cw-peek"), "mouseover"); return wait(500).then(function () { return click(w); }); })
-    .then(function () { return wait(2200); })
-    .then(function () { return moveTo({ x: 700, y: 560 }, 700); })
-    .then(function () { mouse($("#cw-peek"), "mouseout"); return wait(3000); })
-
-    // radar: live VATSIM traffic, a plane's full tag, its own window
-    .then(function () { return caption("The <b>Radar</b> tab: live VATSIM traffic, controllers and sectors"); })
+    .then(function () { return wait(2000); })
+    .then(function () { mouse($("#cw-peek"), "mouseout"); return moveTo({ x: 700, y: 560 }, 600); })
+    .then(function () { return wait(1500); })
+    .then(function () { return caption("Request your <b>oceanic clearance</b>"); })
     .then(function () { return go("#cw-bubble", 800); })
     .then(function (b) { return clickBubble(b); })
+    .then(function () { return goClick("#cw-req-toggle"); })
+    .then(function () { return goClick('#cw-req-kind2 [data-v="oceanic"]'); })
+    .then(function () { return fill("cw-f-station", "EGGX"); })
+    .then(function () { return fill("cw-f-entry", "DINIM"); })
+    .then(function () { return fill("cw-f-eta", "1430"); })
+    .then(function () { return fill("cw-f-mach", "84"); })
+    .then(function () { return fill("cw-f-fl", "370"); })
+    .then(function () { return goClick("#cw-send", 500); })
+    .then(function () { return goClick("#cw-req-toggle", 500); })
+    .then(function () { return caption("Oceanic clearance received"); })
+    .then(function () { return wait(3800); })
+
+    // ======== 3. SELCAL ========
+    .then(function () { return caption("<b>SELCAL</b>: codes no one on VATSIM is using"); })
+    .then(function () { return goClick('.cw-tab[data-tab="selcal"]', 700); })
+    .then(function () { return fill("cw-sc-callsign", "BAW117"); })
+    .then(function () { return goClick("#cw-sc-gen", 600); })
+    .then(function () { return wait(1800); })
+    .then(function () { return caption("Checked against every flight plan on VATSIM, then sent to vPilot's connect form"); })
+    .then(function () { return goClick("#cw-sc-use", 700); })
+    .then(function () { return wait(2400); })
+
+    // ======== 4. Radar ========
+    .then(function () { return caption("<b>Radar</b>: live VATSIM traffic, controllers and sectors"); })
     .then(function () { return goClick('.cw-tab[data-tab="radar"]', 700); })
-    .then(function () { return wait(3500); })
-    .then(function () { return goClick("#rd-zin", 700); })
-    .then(function () { return wait(2200); })
+    .then(function () { return wait(4200); })
     .then(function () { return caption("Click a plane for its full tag"); })
-    .then(planeOnScreen)                                          // the real plane nearest the centre, right now
-    .then(function (p) { return moveTo(p, 800).then(function () { return p; }); })
-    .then(function (p) { ripple(false); mouseAt($("#rd-map"), p, "mousedown"); mouseAt($("#rd-map"), p, "mouseup"); return wait(3600); })
-    .then(function () { return caption("Detach it into its own window, and keep flying"); })
-    .then(function () { return goClick("#rd-detach", 800); })
-    .then(function () { return wait(3200); })
+    .then(planeOnScreen)
+    .then(function (p) { return p ? moveTo(p, 800).then(function () { return p; }) : null; })
+    .then(mapClick)
+    .then(function () { return wait(3300); })
+    .then(function () { return goClick("#rd-cardx", 600); })
+    .then(function () { return caption("Click a controlled airport for its controllers and ATIS"); })
+    .then(atcOnScreen)
+    .then(function (p) { return p ? moveTo(p, 800).then(function () { return p; }) : null; })
+    .then(mapClick)
+    .then(function () { return wait(3600); })
+    .then(function () { return goClick("#rd-cardx", 600); })
+    .then(function () { return caption("The target button centres the map on your aircraft"); })
+    .then(function () { return goClick("#rd-me", 700); })
+    .then(function () { return wait(2600); })
+    .then(function () { return caption("Click it again to keep tracking your aircraft"); })
+    .then(function () { return goClick("#rd-me", 500); })
+    .then(function () { return wait(3400); })
+    .then(function () { return caption("Labels, controllers, zoom and display size"); })
+    .then(function () { return goClick("#rd-tLabels", 700); })
+    .then(function () { return wait(1100); })
+    .then(function () { return goClick("#rd-tLabels", 400); })
+    .then(function () { return wait(700); })
+    .then(function () { return goClick("#rd-tAtc", 600); })
+    .then(function () { return wait(1100); })
+    .then(function () { return goClick("#rd-tAtc", 400); })
+    .then(function () { return wait(700); })
+    .then(function () { return goClick("#rd-zin", 600); })
+    .then(function () { return wait(1300); })
+    .then(function () { return goClick("#rd-zout", 500); })
+    .then(function () { return wait(1300); })
+    .then(function () { return goClick("#rd-tSize", 600); })
+    .then(function () { return wait(1100); })
+    .then(function () { return goClick("#rd-tSize", 300); })
+    .then(function () { return wait(1100); })
+    .then(function () { return goClick("#rd-tSize", 300); })
+    .then(function () { return wait(1100); })
+    .then(function () { return goClick("#rd-tSize", 300); })
+    .then(function () { return wait(1000); })
     .then(function () { return caption("<b>Clearway for VATSIM</b>: free on flightsim.to and GitHub"); })
     .then(function () { return wait(3500); });
 }
@@ -303,6 +404,7 @@ function start() {
   var f = document.getElementById("panel");
   f.onload = function () {
     doc = f.contentDocument;
+    installSim(f.contentWindow);
     waitFor("#cw-bubble").then(function () { return wait(2500); }).then(function () { window.__ready = true; return new Promise(function (r) { window.__go = r; }); })
       .then(flight)
       .then(function () { window.__done = true; }, function (e) { window.__error = String(e); window.__done = true; });
@@ -312,14 +414,14 @@ function start() {
 try {
   localStorage.setItem("CLEARWAY_POS", JSON.stringify({ x: 0.03, y: 0.25 }));
   localStorage.setItem("CLEARWAY_EXPANDED", "false");
-  localStorage.setItem("CLEARWAY_TAB", JSON.stringify("cpdlc"));
+  localStorage.setItem("CLEARWAY_TAB", JSON.stringify("vpilot"));
   localStorage.setItem("CLEARWAY_LOCK", "null");
+  localStorage.setItem("CLEARWAY_PAUSED", "false");
   localStorage.removeItem("CLEARWAY_CHATS");
+  localStorage.setItem("CLEARWAY_SC_SAVED", "false");
   localStorage.setItem("CLEARWAY_RADAR_DETACHED", "false");
-  // the detached radar window opens inside the recorded area (x 0-1024, y 150-726 of 1920x1080), above the caption
-  localStorage.setItem("CLEARWAY_RADAR_WIN", JSON.stringify({ x: 0.235, y: 0.17, w: 0.285, h: 0.3 }));
   localStorage.setItem("radar.opts", JSON.stringify({ labels: true, atc: true, ground: true, depLines: true, arrLines: true, track: false, size: "auto" }));
-  // ?rv=x,y,z: radar view chosen by record_demo.py, centred on a real plane in the busiest traffic
+  // ?rv=x,y,z: radar view chosen by record_demo.py, over the busiest traffic
   var rv = /[?&]rv=([\d.]+),([\d.]+),([\d.]+)/.exec(location.search);
   if (rv) localStorage.setItem("radar.view", JSON.stringify({ x: +rv[1], y: +rv[2], z: +rv[3] }));
 } catch (e) { /* ignore */ }

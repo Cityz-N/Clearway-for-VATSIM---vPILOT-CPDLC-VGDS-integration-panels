@@ -51,7 +51,7 @@
     const v = sc.vatsim || {};
     $("scFeed").textContent = v.checked ? `VATSIM: ${v.count} flight plans checked` : (v.error || "");
     // SimBrief
-    $("scSbWho").textContent = sc.simbrief_user ? sc.simbrief_user : "";
+    $("scSbWho").textContent = sc.simbrief_user ? "******" : "";      // kept private on screen
     if (document.activeElement !== $("scSbUserIn") && !$("scSbUserIn").value) $("scSbUserIn").value = sc.simbrief_user || "";
     const ofp = sc.simbrief;
     if (ofp) {
@@ -118,7 +118,7 @@
     try {
       const d = await CW.api("selcal/use", { code });
       const vpSel = $("vpSelcal");
-      if (vpSel) { vpSel.value = d.code.replace("-", ""); if (CW.vpSelcalCheck) CW.vpSelcalCheck(); }
+      if (vpSel) { vpSel.value = d.code; if (CW.vpSelcalCheck) CW.vpSelcalCheck(); }
       CW.toast(`${d.code} is set in the vPilot connect form`);
     } catch (e) { CW.toast(e.message, true); }
   }

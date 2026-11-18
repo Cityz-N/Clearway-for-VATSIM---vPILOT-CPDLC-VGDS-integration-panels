@@ -17,8 +17,15 @@
   var GROUND_MIN_Z = 10;       // planes on the ground only show at this zoom and closer
 
   var el = function (id) { return document.getElementById("rd-" + id); };   // all radar elements are rd-*
-  var canvas = el("map");
+  // Two stacked canvases (double buffering, see moveFrame): `front` is the one on screen, `canvas`/`ctx` the one
+  // being drawn. In MSFS 2024 a repainted canvas reaches the screen a few frames late, so a new frame is drawn on
+  // the hidden one underneath and only brought to the front once the sim has had time to show it.
+  var canvasA = el("map"), canvasB = el("map2");
+  var box = canvasA.parentNode;
+  var front = canvasA;
+  var canvas = canvasA;
   var ctx = canvas.getContext("2d");
+  function ctxOf(cv) { return cv.getContext("2d"); }
 
   // ------------------------------------------------------------ state
   var W = 0, H = 0, DPR = 1;
@@ -26,7 +33,7 @@
   var opts = load("radar.opts", { labels: true, atc: true, ground: true, depLines: true, arrLines: true, track: false, size: "auto" });
   // display size: "auto" follows the screen height (1080p = 1x, 1440p = 1.33x, 4K = 2x); the others force a size
   var SIZES = { "1080p": 1, "1440p": 1.333, "4K": 2 }, SIZE_ORDER = ["auto", "1080p", "1440p", "4K"];
-  var SIZE_LABEL = { "auto": "AUTO", "1080p": "1080", "1440p": "1440", "4K": "4K" };
+  var SIZE_LABEL = { "auto": "AUTO", "1080p": "1080p", "1440p": "1440p", "4K": "4K" };
   var pilots = [];        // {cs, mx, my, alt, gs, hdg, type, freq, dep, arr, sq, kind}
   var atc = null;         // processed controller data
   var atcVer = "";
@@ -42,7 +49,8 @@
   var dirty = true;
   var hits = [];          // aircraft screen positions from the last draw
   var badgeHits = [];     // airport badge rects from the last draw
-  var perf = { on: /[?&]perf=1/.test(qs), last: 0, total: 0, n: 0, draws: [], planes: 0 };
+  var perf = { on: /[?&]perf=1/.test(qs), last: 0, total: 0, n: 0, draws: [], planes: 0,
+    rafs: [], frames: [], moves: [], fullMs: null, fastMs: null, snapMs: null, snapN: 0 };
 
   function load(key, fallback) {
     try {
@@ -231,7 +239,7 @@
     return null;
   }
   function pump() {
-    while (loading < 8 && queue.length) {
+    while (loading < 12 && queue.length) {      // 12 at a time (Clearway keeps its tile connections open)
       (function (t) {
         loading++;
         t.img.onload = function () {
@@ -256,26 +264,49 @@
     // only load what is on screen now: forget tiles still waiting from an older view
     for (var q = 0; q < queue.length; q++) delete tiles[queue[q].key];
     queue.length = 0;
+    // Tiles are placed in device pixels, each edge rounded once and shared with the neighbour (left/top of one
+    // tile = right/bottom of the previous). Rounding the size separately left 1 px gaps or overlaps between rows
+    // and columns at in-between zoom levels: the seams seen while zooming.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    var D = DPR * ws;
     for (ty = ty0; ty <= ty1; ty++) {
+      var py0 = Math.round((ty / n - y0) * D), py1 = Math.round(((ty + 1) / n - y0) * D);
       for (tx = tx0; tx <= tx1; tx++) {
-        var dx = Math.round((tx / n - x0) * ws), dy = Math.round((ty / n - y0) * ws);
-        var sz = Math.round(((tx + 1) / n - x0) * ws) - dx;
+        var px0 = Math.round((tx / n - x0) * D), px1 = Math.round(((tx + 1) / n - x0) * D);
+        var dw = px1 - px0, dh = py1 - py0;
         var wx = ((tx % n) + n) % n;
         var img = tileImg(tz, wx, ty, true);
         // one broken tile must not abort the whole frame (that blanked the map when zoomed out)
-        if (img) { try { ctx.drawImage(img, dx, dy, sz, sz); continue; } catch (e) { delete tiles[tz + "/" + wx + "/" + ty]; } }
+        if (img) { try { ctx.drawImage(img, px0, py0, dw, dh); continue; } catch (e) { delete tiles[tz + "/" + wx + "/" + ty]; } }
         // fall back to a lower zoom tile already loaded
         for (var up = 1; up <= 4 && tz - up >= 1; up++) {
           var f = Math.pow(2, up), pimg = tileImg(tz - up, Math.floor(wx / f), Math.floor(ty / f), false);
           if (pimg) {
             var sub = 256 / f;
-            try { ctx.drawImage(pimg, (wx % f) * sub, (ty % f) * sub, sub, sub, dx, dy, sz, sz); } catch (e) { continue; }
+            try { ctx.drawImage(pimg, (wx % f) * sub, (ty % f) * sub, sub, sub, px0, py0, dw, dh); } catch (e) { continue; }
             break;
           }
         }
       }
     }
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     perf.tiles = tileOrder.length;
+  }
+
+  // During a drag or zoom ("move" mode draws nothing), ask early for the tiles of the view being moved to, so they
+  // are often there when the full frame is drawn. Same tile range as drawTiles; nothing is drawn.
+  var prefetchAt = 0;
+  function prefetchTiles() {
+    var t = Date.now();
+    if (t - prefetchAt < 150) return;
+    prefetchAt = t;
+    var ws = worldSize(), tz = Math.max(1, Math.min(TILE_MAX_Z, Math.round(view.z))), n = Math.pow(2, tz);
+    var x0 = view.x - W / 2 / ws, y0 = view.y - H / 2 / ws;
+    var tx0 = Math.floor(x0 * n), ty0 = Math.max(0, Math.floor(y0 * n));
+    var tx1 = Math.floor((view.x + W / 2 / ws) * n), ty1 = Math.min(n - 1, Math.floor((view.y + H / 2 / ws) * n));
+    if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) > 80) return;          // zoomed far out mid-gesture: not worth it
+    for (var ty = ty0; ty <= ty1; ty++) for (var tx = tx0; tx <= tx1; tx++) tileImg(tz, ((tx % n) + n) % n, ty, true);
+    pump();
   }
 
   // ------------------------------------------------------------ drawing
@@ -311,9 +342,11 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.fillStyle = "#0b0e13";
     ctx.fillRect(0, 0, W, H);
-    ctx.globalAlpha = 0.55;                    // tiles drawn half-transparent over the dark fill = darker basemap
+    // darker basemap: opaque tiles, then one 45 % layer of the background colour over everything (same look as
+    // drawing the tiles at 55 % over the dark fill, but a tile edge can never show as a lighter or darker line)
     drawTiles(ws);
-    ctx.globalAlpha = 1;
+    ctx.fillStyle = "rgba(11, 14, 19, 0.45)";
+    ctx.fillRect(0, 0, W, H);
     drawTrafficAirports(ws);
     if (opts.atc && atc) drawAtc(ws);
     if (selected && selected.kind === "airport") drawRoutes(ws, selected.key);
@@ -782,13 +815,17 @@
 
   // ------------------------------------------------------------ input
   // pointer position in map units (the sim panel is drawn at UI scale)
-  function px(e) { var r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / UI, y: (e.clientY - r.top) / UI }; }
+  // measured on the canvas's box (its parent): the canvas itself may be shifted by a pan in progress
+  function px(e) { var r = box.getBoundingClientRect(); return { x: (e.clientX - r.left) / UI, y: (e.clientY - r.top) / UI }; }
+  function setCursor(c) { canvasA.className = c; canvasB.className = c; }
+  // both canvases take the mouse (whichever is in front at the time)
+  function onCanvas(type, fn) { canvasA.addEventListener(type, fn); canvasB.addEventListener(type, fn); }
   var drag = null;
   // Clearway's panel only receives the mouse over its own boxes: while dragging, its full-screen capture
   // layer is switched on so the drag keeps going when the pointer leaves the radar
   function capture(on) { if (o.capture) o.capture.classList.toggle("on", on); }
-  function endDrag() { drag = null; canvas.className = ""; capture(false); }
-  canvas.addEventListener("mousedown", function (e) {
+  function endDrag() { drag = null; setCursor(""); capture(false); }
+  onCanvas("mousedown", function (e) {
     if (e.button !== 0) return;
     drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false };
     capture(true);
@@ -799,9 +836,10 @@
     if (!drag) return;
     if (typeof e.buttons === "number" && e.buttons === 0 && drag.moved) { endDrag(); save("radar.view", view); return; }
     drag.lastMove = Date.now();
+    stamp(perf.moves);
     var dx = (e.clientX - drag.x) / UI, dy = (e.clientY - drag.y) / UI;
     if (!drag.moved && dx * dx + dy * dy < 16) return;
-    if (!drag.moved) { drag.moved = true; canvas.className = "drag"; if (follow) setFollow(false); }
+    if (!drag.moved) { drag.moved = true; setCursor("drag"); if (follow) setFollow(false); if (trkMode) { trkMode = 0; showTrk(); } }
     var ws = worldSize();
     view.x = drag.vx - dx / ws;
     view.y = Math.max(0, Math.min(1, drag.vy - dy / ws));
@@ -817,13 +855,13 @@
     showCard();
     dirty = true;
   });
-  canvas.addEventListener("wheel", function (e) {
+  onCanvas("wheel", function (e) {
     e.preventDefault();
     wheelAt = Date.now();
     var q = px(e);
     zoomAt((e.deltaY < 0 ? 0.5 : -0.5), q.x, q.y);
   });
-  canvas.addEventListener("dblclick", function (e) {
+  onCanvas("dblclick", function (e) {
     var q = px(e);
     zoomAt(1, q.x, q.y);
   });
@@ -849,11 +887,26 @@
     for (var i = 0; mineCs && i < pilots.length; i++) if (pilots[i].cs === mineCs) return pilots[i];
     return null;
   }
+  // Target button, two modes: 1 = centred on your aircraft once, 2 = centred and tracking it.
+  // Click: off -> 1 -> 2 -> off. Dragging the map turns it off.
+  var trkMode = 0;
+  function showTrk() {
+    var b = el("me");
+    b.className = "btn tog target" + (trkMode === 1 ? " half" : "") + (trkMode === 2 ? " on" : "");
+    b.title = trkMode === 0 ? "Centre on my aircraft (click again to keep tracking it)"
+      : trkMode === 1 ? "Centred on my aircraft: click again to keep tracking it" : "Tracking my aircraft: click to stop";
+  }
   function setFollow(on) {
     follow = on;
+    trkMode = on ? 2 : (trkMode === 2 ? 0 : trkMode);
     opts.track = on; save("radar.opts", opts);
-    el("me").className = "btn tog" + (on ? " on" : "");
+    showTrk();
     if (on) trackNow();
+  }
+  function centreOnce() {
+    var p = myPos();
+    if (!p) { el("status").textContent = "waiting for your aircraft..."; return; }
+    view.x = p.mx; view.y = p.my; dirty = true; save("radar.view", view);
   }
   function trackNow() {
     var p = myPos();
@@ -863,11 +916,13 @@
     }
   }
   el("me").onclick = function () {
-    setFollow(!follow);
-    if (follow && !myPos()) el("status").textContent = "tracking: waiting for your aircraft...";
+    if (trkMode === 0) { trkMode = 1; showTrk(); centreOnce(); }
+    else if (trkMode === 1) { setFollow(true); if (!myPos()) el("status").textContent = "tracking: waiting for your aircraft..."; }
+    else { trkMode = 0; setFollow(false); }
   };
   follow = !!opts.track;
-  el("me").className = "btn tog" + (follow ? " on" : "");
+  trkMode = follow ? 2 : 0;
+  showTrk();
 
   // Which network callsign is you: in the sim, the pilot in the feed closest to your sim position
   // (within ~4 nm and 1500 ft, since the feed is up to 15 s old). Once found it sticks while it stays near.
@@ -906,7 +961,7 @@
   }
   bindToggle("tLabels", "labels");
   bindToggle("tAtc", "atc");
-  bindToggle("tGround", "ground");
+  opts.ground = true;          // no GND button any more: planes on the ground show from airport zoom (GROUND_MIN_Z)
   function showSize() { el("tSize").textContent = SIZE_LABEL[opts.size] || "AUTO"; el("tSize").title = "Display size: " + opts.size + " (click to change)"; }
   if (el("tSize")) {
     showSize();
@@ -918,6 +973,20 @@
   }
   el("status").onclick = function () { perf.on = !perf.on; el("perf").className = perf.on ? "" : "hidden"; if (perf.on) showPerf(); };
   if (perf.on) el("perf").className = "";
+  // clicking the readout cycles the pan / zoom method: auto -> quick -> full (to compare them in the sim)
+  el("perf").onclick = function () {
+    quickMode = MODES[(MODES.indexOf(quickMode) + 1) % MODES.length];
+    // back to a single canvas on screen, unshifted (the other modes draw straight on the front one)
+    var other = front === canvasA ? canvasB : canvasA;
+    swap = null; moved = false;
+    front.style.transform = ""; front.style.visibility = "visible"; front.style.zIndex = 1;
+    other.style.transform = ""; other.style.visibility = "hidden"; other.style.zIndex = 0;
+    canvas = front; ctx = ctxOf(front);
+    quickOff = false; perf.snapN = 0; perf.snapMs = null; perf.fastMs = null;
+    snap.ok = false; dirty = true; showPerf();
+  };
+  // the readout refreshes on its own while open (fps and mouse rates change without a full redraw)
+  setInterval(function () { if (perf.on && !paused) showPerf(); }, 500);
 
   // benchmark: redraw n times while panning, return average ms per frame (used for the perf test)
   window.radarBench = function (n, z) {
@@ -947,9 +1016,16 @@
     var now = Date.now();
     while (perf.draws.length && perf.draws[0] < now - 10000) perf.draws.shift();
     var mem = (window.performance && performance.memory) ? Math.round(performance.memory.usedJSHeapSize / 1048576) + " MB" : "n/a";
+    var ms = function (v) { return v === null ? "-" : v.toFixed(1) + " ms"; };
+    var per2s = function (list) { while (list.length && list[0] < now - 2000) list.shift(); return (list.length / 2).toFixed(0); };
+    var mode = quickMode === "auto" ? "auto (" + (useQuick() ? "quick" : "full") + ")" : quickMode;
     el("perf").textContent =
       "draw   " + perf.last.toFixed(1) + " ms (avg " + (perf.total / Math.max(1, perf.n)).toFixed(1) + ")\n" +
       "draws  " + perf.draws.length + " in last 10 s\n" +
+      "fps    " + per2s(perf.frames) + " drawn / " + per2s(perf.rafs) + " ticks\n" +
+      "mouse  " + per2s(perf.moves) + " moves/s\n" +
+      "copy   " + ms(perf.snapMs) + "  quick " + ms(perf.fastMs) + "\n" +
+      "mode   " + mode + "  (click to change)\n" +
       "planes " + perf.planes + " on screen / " + pilots.length + "\n" +
       "sector pts " + (perf.sectorPts || 0) + "\n" +
       "tiles  " + (perf.tiles || 0) + " cached\n" +
@@ -980,35 +1056,43 @@
   // ------------------------------------------------------------ loop
   // In the sim, everything is scaled with the screen height (1.0 at 1080p, 1.33 at 1440p) so text stays readable.
   function resize() {
-    var r = canvas.getBoundingClientRect();
+    var r = box.getBoundingClientRect();
     var forced = parseFloat((/[?&]ui=([\d.]+)/.exec(qs) || [])[1]);           // ?ui=1.33 to test in a browser
     var auto = IN_SIM ? Math.max(1, (window.innerHeight || 1080) / 1080) : 1;
     UI = forced || (opts.size === "auto" ? auto : SIZES[opts.size]) || auto;
     DPR = (window.devicePixelRatio || 1) * UI;
     W = Math.max(1, Math.round(r.width / UI)); H = Math.max(1, Math.round(r.height / UI));
-    canvas.width = Math.round(r.width * (window.devicePixelRatio || 1));
-    canvas.height = Math.round(r.height * (window.devicePixelRatio || 1));
+    var cw = Math.round(r.width * (window.devicePixelRatio || 1)), chh = Math.round(r.height * (window.devicePixelRatio || 1));
+    canvasA.width = cw; canvasA.height = chh; canvasB.width = cw; canvasB.height = chh;
+    swap = null; canvas = front; ctx = ctxOf(front);      // a resize clears both: the next frame redraws the front one
+    if (moved) { front.style.transform = ""; moved = false; }
     sprites = {};
     snap.ok = false;                                   // the last frame no longer matches the canvas
     // all panel sizes are in em (radar.css); shrink them if the button column would not fit the window
     var font = 12 * UI;
     el("radar").style.fontSize = font + "px";
+    // the buttons (left column, status and detach) keep one size whatever the display size: the 1440p one
+    var btnFont = 12 * SIZES["1440p"];
+    el("tools").style.fontSize = btnFont + "px";
+    el("topright").style.fontSize = btnFont + "px";
+    el("credit").style.fontSize = (btnFont * 0.75) + "px";   // the map credits too (12 px, the 1440p size)
     var need = el("tools").offsetTop + el("tools").offsetHeight, avail = r.height - 4;
-    if (need > avail && avail > 40) {
-      font = Math.max(6, font * avail / need);
-      el("radar").style.fontSize = font + "px";
+    if (need > avail && avail > 40) {                    // a small window: shrink the button column to fit
+      btnFont = Math.max(6, btnFont * avail / need);
+      el("tools").style.fontSize = btnFont + "px";
+      el("topright").style.fontSize = btnFont + "px";
     }
     lastSize = r.width + "x" + r.height;
     dirty = true;
   }
   var lastSize = "";
   window.addEventListener("resize", resize);
-  var snap = { cv: null, x: 0, y: 0, z: 0, ok: false, fast: false };
+  var snap = { cv: null, x: 0, y: 0, z: 0, ok: false, fast: false, view: false };
   resize();
   // the sim does not always send a resize event when the panel window is resized: check the size ourselves
   setInterval(function () {
     if (paused) return;
-    var r = canvas.getBoundingClientRect();
+    var r = box.getBoundingClientRect();
     if (r.width > 0 && r.height > 0 && r.width + "x" + r.height !== lastSize) resize();
   }, 300);
 
@@ -1029,7 +1113,7 @@
   document.addEventListener("visibilitychange", function () { checkVisible(); });
   function isVisible() {
     if (!panelActive || document.hidden) return false;
-    var r = canvas.getBoundingClientRect();
+    var r = box.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   }
   function checkVisible() {
@@ -1046,22 +1130,102 @@
     }
   }
   function startFrames() { if (!rafOn) { rafOn = true; window.requestAnimationFrame(frame); } }
+  function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+  function ema(prev, v) { return prev === null ? v : prev * 0.8 + v * 0.2; }
+  function stamp(list) { var t = Date.now(); list.push(t); while (list.length && list[0] < t - 2000) list.shift(); }
   function frame() {
     if (paused) { rafOn = false; return; }
     // schedule the next frame first: an error while drawing must never stop the loop
     // (that is what froze the map after a resize: the loop died and nothing redrew any more)
     window.requestAnimationFrame(frame);
+    stamp(perf.rafs);
     try {
+      if (swap && --swap.ticks <= 0) doSwap();
+      var t0 = nowMs();
       if (dirty) {
-        if (interacting() && snap.ok) drawFast();
-        else { draw(); takeSnapshot(); }
+        if (interacting() && quickMode === "move" && snap.view) { movePan(); perf.fastMs = ema(perf.fastMs, nowMs() - t0); }
+        else if (interacting() && quickMode !== "move" && snap.ok && useQuick()) { drawFast(); perf.fastMs = ema(perf.fastMs, nowMs() - t0); }
+        else fullFrame();
+        stamp(perf.frames);
       } else if (snap.fast && !interacting()) {
-        draw(); takeSnapshot();             // interaction over: one full redraw at the final position
+        fullFrame();                        // interaction over: one full redraw at the final position
+        stamp(perf.frames);
       }
     } catch (e) {
       snap.ok = false; dirty = true;
       if (window.console) console.error("radar draw failed", e);
     }
+  }
+  // A full redraw, then (in quick mode) a copy of it for fast panning. In MSFS 2024 that canvas-to-canvas copy
+  // can cost far more than the redraw itself, so it is timed too and only made while the quick mode pays off.
+  function fullFrame() {
+    if (quickMode === "move") return moveFrame();
+    canvas = front; ctx = ctxOf(front);                         // the other modes draw straight on screen
+    draw();
+    perf.fullMs = ema(perf.fullMs, perf.last);
+    if (moved) { front.style.transform = ""; moved = false; }   // same frame as the redraw: no flash
+    snap.x = view.x; snap.y = view.y; snap.z = view.z; snap.view = true;
+    if (quickMode === "full" || (quickMode === "auto" && quickOff)) { snap.ok = false; snap.fast = false; return; }
+    var t = nowMs();
+    takeSnapshot();
+    perf.snapMs = ema(perf.snapMs, nowMs() - t);
+    perf.snapN++;
+    // auto: after a few samples, drop the quick mode when the copy + quick frame cost more than a full redraw
+    if (quickMode === "auto" && perf.snapN >= 3 && perf.snapMs > perf.fullMs + 2) quickOff = true;
+  }
+  // How a drag / zoom is shown until the full redraw when it stops:
+  //  "move" (default): the canvas element itself is shifted and scaled with a CSS transform, nothing is repainted.
+  //     In MSFS 2024 repainting the canvas every frame lags behind the mouse even though the drawing is fast,
+  //     while moving an element is as smooth as dragging Clearway's icon.
+  //  "auto": quick canvas copy unless measured slower; "quick" / "full": forced. Click the readout to cycle.
+  var quickMode = "move", quickOff = false, moved = false;
+  var MODES = ["move", "auto", "quick", "full"];
+  function movePan() {
+    dirty = false;
+    var ws = worldSize(), s = Math.pow(2, view.z - snap.z);
+    var dx = wrapDx(snap.x - view.x) * ws + W / 2 - (W / 2) * s;
+    var dy = (snap.y - view.y) * ws + H / 2 - (H / 2) * s;
+    front.style.transformOrigin = "0 0";
+    front.style.transform = "translate(" + (dx * UI).toFixed(1) + "px," + (dy * UI).toFixed(1) + "px) scale(" + s.toFixed(4) + ")";
+    moved = true;
+    snap.fast = true;
+    prefetchTiles();
+  }
+
+  // Double buffering for "move": the new frame is drawn on the hidden canvas underneath, at the current view and
+  // without any transform. SWAP_TICKS frames later (time for the sim to put it on screen) it becomes the front one
+  // and the old one, still shifted, goes behind. Bringing in a canvas the sim has already shown is instant, so the
+  // map never jumps back to where the drag started while the new picture is on its way.
+  var SWAP_TICKS = IN_SIM ? 3 : 1;
+  var swap = null;
+  function moveFrame() {
+    if (swap) { dirty = true; return; }               // one redraw on its way: the next one waits for the swap
+    var back = front === canvasA ? canvasB : canvasA;
+    back.style.transform = "";
+    back.style.visibility = "visible";
+    canvas = back; ctx = ctxOf(back);
+    draw();
+    canvas = front; ctx = ctxOf(front);
+    perf.fullMs = ema(perf.fullMs, perf.last);
+    swap = { ticks: SWAP_TICKS, cv: back, x: view.x, y: view.y, z: view.z };
+    snap.fast = false; snap.ok = false;
+  }
+  function doSwap() {
+    var old = front, s = swap;
+    swap = null;
+    s.cv.style.zIndex = 1; old.style.zIndex = 0;
+    front = s.cv;
+    snap.x = s.x; snap.y = s.y; snap.z = s.z; snap.view = true;
+    old.style.transform = ""; old.style.visibility = "hidden";
+    moved = false;
+    canvas = front; ctx = ctxOf(front);
+    // the view moved on while the frame was on its way: shift the new front to match right away
+    if (s.x !== view.x || s.y !== view.y || s.z !== view.z) { movePan(); dirty = true; }
+  }
+  function useQuick() {
+    if (quickMode === "full") return false;
+    if (quickMode === "quick") return true;
+    return !quickOff && !(perf.fastMs !== null && perf.fullMs !== null && perf.fastMs > perf.fullMs);
   }
 
   // ------------------------------------------------------------ fast pan / zoom
@@ -1070,7 +1234,9 @@
   var wheelAt = 0;
   // a drag counts as "in progress" only while the mouse keeps moving: a release the sim never reported
   // can no longer leave the map stuck in the fast mode
-  function interacting() { return (drag && drag.moved && Date.now() - drag.lastMove < 300) || Date.now() - wheelAt < 180; }
+  // the wheel counts as zooming for 300 ms after each step in "move" mode (180 ms otherwise), so a slow scroll is
+  // one smooth zoom instead of a redraw between every notch (that was the jitter in MSFS 2024)
+  function interacting() { return (drag && drag.moved && Date.now() - drag.lastMove < 300) || Date.now() - wheelAt < (quickMode === "move" ? 300 : 180); }
   function takeSnapshot() {
     try {
       if (!canvas.width || !canvas.height) { snap.ok = false; return; }
@@ -1110,15 +1276,17 @@
   // The radar's markup (all ids rd-*). mount() builds it inside o.container; Clearway can later move the
   // #rd-radar element between its card and the detached window (listeners move with it).
   var MARKUP =
-    '<canvas id="rd-map"></canvas>' +
+    '<canvas id="rd-map"></canvas><canvas id="rd-map2"></canvas>' +
     '<div id="rd-tools">' +
       '<div id="rd-zin" class="btn big" title="Zoom in">+</div>' +
       '<div id="rd-zout" class="btn big" title="Zoom out">-</div>' +
-      '<div id="rd-me" class="btn tog" title="Track my aircraft">TRK</div>' +
+      '<div id="rd-me" class="btn tog target" title="Centre on my aircraft (click again to keep tracking it)">' +
+        '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.5"/><circle class="dot" cx="12" cy="12" r="1.8"/>' +
+        '<path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/></svg></div>' +
       '<span class="sep"></span>' +
       '<div id="rd-tLabels" class="btn tog on" title="Aircraft labels">LBL</div>' +
       '<div id="rd-tAtc" class="btn tog on" title="Controllers and sectors">ATC</div>' +
-      '<div id="rd-tGround" class="btn tog on" title="Aircraft on the ground">GND</div>' +
+
       '<span class="sep"></span>' +
       '<div id="rd-tSize" class="btn tog on" title="Display size">AUTO</div>' +
     '</div>' +

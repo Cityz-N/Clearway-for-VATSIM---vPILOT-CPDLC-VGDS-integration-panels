@@ -5,11 +5,27 @@
 - New **Radar** tab in the MSFS panel: live VATSIM traffic on a dark map. Planes show their callsign and type with the destination underneath; click one for the full tag (frequency it's tuned to, altitude, speed) and its details. Planes on the ground appear when zoomed in to airport level
 - Radar: online controllers with their sectors from VATGlasses (coloured areas with callsign and frequency), airport badges for Delivery / Ground / Tower / Approach / ATIS, and approach circles where VATGlasses has no data. Click a sector or airport for the controllers, frequencies and ATIS
 - Radar: airports with arriving traffic show as small dots; click an airport for red departure and green arrival lines (each can be switched off)
-- Radar: your own aircraft is green when you're connected (Clearway knows your callsign from the vPilot plugin), or a hollow green outline at your sim position when you're offline or an observer. TRK keeps it in the centre
+- Radar: your own aircraft is green when you're connected (Clearway knows your callsign from the vPilot plugin), or a hollow green outline at your sim position when you're offline or an observer. The target button centres the map on you (click once), then keeps tracking you (click again)
 - Radar: on the Radar tab the card is twice as wide. The detach button opens the radar in its own window that you can move and resize (it stays open when the card is closed); dock it back with the button in its title bar or "Put it back here" in the tab
-- Radar: buttons for labels, ATC, ground traffic and display size (AUTO / 1080 / 1440 / 4K)
+- Radar: buttons for labels, ATC and display size (AUTO / 1080p / 1440p / 4K). The buttons and the map credits keep the same size whatever the display size
 - Radar: nothing is downloaded or drawn while the radar is hidden; its data (about 120 MB of memory) only loads the first time you open it. Map: Esri World Dark Gray Canvas; sectors: VATGlasses (CC BY-NC-SA 4.0); airports: VATSpy data project (CC BY-SA 4.0)
 - MSFS panel: the card is a little wider so its header fits all four tabs, the clock and the buttons (with four tabs the notepad and collapse buttons were cut off)
+- Radar: smooth dragging and zooming in MSFS 2024 (the map is moved on screen while you drag and redrawn when you stop), no more gaps between map tiles, and new map areas load about twice as fast
+- Radar: the detached radar window stays under the Clearway card
+- MSFS panel: the floating icon turns solid when a message arrives instead of flashing, and is fully visible for the first 10 seconds so it's easy to find
+- MSFS panel: right click on the icon works in MSFS 2024 (peek at the latest message, CPDLC replies, WX)
+- MSFS panel: Tab / Shift+Tab move between text boxes
+- MSFS panel: new mute icon for notifications and a rotation-lock icon for the card direction
+- MSFS panel: fixed a drawing glitch in MSFS 2024 when the card changed size (deleted messages, request form)
+- vPilot: Nearby ATC on the left of the chat tabs (its count stands out when controllers are online), frequency on the right; hover the frequency for TX / RX on each radio
+- vPilot: Mode C, Standby and Ident now also set the aircraft's transponder in the sim, which vPilot follows (from the panel and the phone)
+- vPilot: the SELCAL in the connect form is always written AB-CD
+- vPilot: as an observer you can only send private messages, not frequency text
+- vPilot: the FP status badge is red with a cross when no flight plan is filed on VATSIM and green with a tick when it is
+- vPilot: "vPilot not opened / plugin not found" when Clearway can't reach vPilot
+- CPDLC: Hoppie status in the CPDLC tab (green tick connected, red cross not); click it to type or paste your logon code. The code and your SimBrief ID are hidden on screen
+- CPDLC: a logon request with no answer after 10 minutes is cancelled
+- SELCAL: the VATSIM flight plan count is no longer shown in the bar
 
 ## 0.9.8
 

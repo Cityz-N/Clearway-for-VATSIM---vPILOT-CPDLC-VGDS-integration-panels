@@ -2,11 +2,17 @@
    whole interface scales together. The sim registers its Roboto as "Roboto-Regular" (weights 300/600/700). */
 #rd-radar {
   position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; background: #0b0e13;
+  z-index: 0;   /* keeps the canvases' and overlays' z-index inside the radar (never above Clearway's card) */
   font-family: "Roboto-Regular", "Roboto", "Segoe UI", Arial, sans-serif; font-size: 12px; color: #dfe6ef;
   text-transform: none; letter-spacing: 0; line-height: 1.3;
 }
-#rd-map { position: absolute; left: 0; top: 0; width: 100%; height: 100%; cursor: grab; }
-#rd-map.drag { cursor: grabbing; }
+/* two stacked canvases (double buffering in radar.js): the front one has z-index 1, the hidden one 0 */
+#rd-map, #rd-map2 { position: absolute; left: 0; top: 0; width: 100%; height: 100%; cursor: grab; }
+#rd-map { z-index: 1; }
+#rd-map2 { z-index: 0; visibility: hidden; }
+#rd-map.drag, #rd-map2.drag { cursor: grabbing; }
+/* everything drawn over the map stays above both canvases */
+#rd-tools, #rd-topright, #rd-card, #rd-perf, #rd-credit { z-index: 3; }
 
 /* plain divs, not <button>: the sim's stylesheet restyles buttons */
 #rd-tools { position: absolute; left: 0.83em; top: 0.83em; }
@@ -66,8 +72,15 @@
 #rd-card .x i.b { transform: rotate(-45deg); }
 
 #rd-perf {
-  position: absolute; right: 0.83em; top: 3.4em; padding: 0.5em 0.75em; border-radius: 0.5em; white-space: pre;
+  position: absolute; right: 0.83em; top: 3.4em; padding: 0.5em 0.75em; border-radius: 0.5em; white-space: pre; cursor: pointer;
   background: rgba(16, 21, 29, 0.85); border: 1px solid #222b37;
   font-family: "RobotoMono-Regular", Consolas, monospace; font-size: 0.92em; color: #9fb3c8;
 }
 #rd-credit { position: absolute; right: 0.5em; bottom: 0.33em; font-size: 0.75em; color: #5d6876; pointer-events: none; }
+
+/* target button (was TRK): 1 = centred once (half lit), 2 = tracking (lit) */
+#rd-tools .btn.tog.target { display: flex; align-items: center; justify-content: center; line-height: normal; }
+#rd-tools .btn.target svg { width: 1.7em; height: 1.7em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+#rd-tools .btn.target svg .dot { fill: none; }
+#rd-tools .btn.tog.target.half { color: #8fd3ff; }
+#rd-tools .btn.tog.target.on svg .dot { fill: currentColor; }

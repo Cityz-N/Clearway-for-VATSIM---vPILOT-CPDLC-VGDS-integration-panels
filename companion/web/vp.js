@@ -63,13 +63,16 @@
   function renderStatus(s, vp) {
     const dot = $("vpStateDot");
     dot.className = "dot " + (!vp.active ? "" : vp.connected ? "online" : "connecting");
-    $("vpWho").textContent = !vp.active ? "vPilot plugin not detected" : vp.connected ? vp.callsign : "vPilot offline";
-    // connected, but VATSIM shows no flight plan for this callsign (or only a prefile)
-    const fpWarn = vp.connected && !vp.observer && (vp.fp_status === "none" || vp.fp_status === "prefiled");
-    $("vpFpWarn").hidden = !fpWarn;
-    $("vpFpWarn").title = vp.fp_status === "prefiled" ? "Only a prefile on VATSIM: the flight plan isn't active for this connection"
+    $("vpWho").textContent = !vp.active ? "vPilot not opened / plugin not found" : vp.connected ? vp.callsign : "vPilot offline";
+    // flight plan on VATSIM: green tick filed, red cross not filed (or only a prefile); hidden until VATSIM knows you
+    const fpShow = !!(vp.connected && !vp.observer && vp.fp_status), fpOk = vp.fp_status === "filed";
+    $("vpFpWarn").hidden = !fpShow;
+    $("vpFpWarn").className = "fp-warn" + (fpOk ? " ok" : "");
+    $("vpFpWarn").textContent = fpOk ? "FP status ✓" : "FP status ✗";
+    $("vpFpWarn").title = fpOk ? `Flight plan filed on VATSIM for ${vp.callsign || "this callsign"}`
+      : vp.fp_status === "prefiled" ? "Only a prefile on VATSIM: the flight plan isn't active for this connection"
       : `No flight plan filed on VATSIM for ${vp.callsign || "this callsign"}`;
-    $("vpWhoSub").textContent = !vp.active ? "Install the Clearway plugin and restart vPilot (see Settings)."
+    $("vpWhoSub").textContent = !vp.active ? "Start vPilot, with the Clearway plugin installed (see Settings)."
       : vp.connected ? (vp.observer ? "Connected to VATSIM as an observer" : "Connected to VATSIM") : "Not connected to VATSIM";
     if (!obsTouched && vp.last) { $("vpObserver").checked = !!vp.last.observer; dimObserver(); }
     const btn = $("vpConnectBtn");
@@ -80,7 +83,7 @@
     // prefill the connect form
     const last = vp.last || {}, f = s.flight || {};
     const fill = (id, v) => { const el = $(id); if (el && !el.value && v && document.activeElement !== el) el.value = v; };
-    fill("vpCs", last.callsign || s.callsign); fill("vpType", last.type || f.aircraft); fill("vpSelcal", last.selcal);
+    fill("vpCs", last.callsign || s.callsign); fill("vpType", last.type || f.aircraft); fill("vpSelcal", fmtSelcal(last.selcal));
     document.querySelectorAll("#vpXpdr button").forEach((b) => {
       b.classList.toggle("on", vp.modec === true ? b.dataset.v === "c" : vp.modec === false ? b.dataset.v === "sby" : false);
       b.disabled = !vp.connected || !!vp.observer;
@@ -91,7 +94,8 @@
     $("vpCom").innerHTML = c ? radio(1, c.com1) + " &middot; " + radio(2, c.com2) : "";
     $("vpAtcCount").textContent = vp.connected && vp.controllers ? `(${vp.controllers.length})` : "";
     $("vpInput").disabled = !vp.active;
-    $("vpInput").placeholder = active === "FREQ" ? "Message, or a .command" : `To ${active}, or a .command`;
+    // observers can't transmit on the frequency: only private messages (Clearway refuses frequency text)
+    $("vpInput").placeholder = active === "FREQ" ? (vp.connected && vp.observer ? "Observer: private messages only (or a .command)" : "Message, or a .command") : `To ${active}, or a .command`;
   }
 
   function renderTabs(chats) {
@@ -258,7 +262,9 @@
       }
     }, delay);
   }
-  $("vpSelcal").addEventListener("input", () => selcalCheck());
+  // SELCAL always written AB-CD: the dash appears by itself after the second tone
+  const fmtSelcal = (v) => { const s = String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4); return s.length > 2 ? `${s.slice(0, 2)}-${s.slice(2)}` : s; };
+  $("vpSelcal").addEventListener("input", () => { const i = $("vpSelcal"), f = fmtSelcal(i.value); if (f !== i.value) i.value = f; selcalCheck(); });
 
   // "SB: CALLSIGN" from the latest SimBrief flight plan, to compare with what's typed
   let sbBusy = false;
