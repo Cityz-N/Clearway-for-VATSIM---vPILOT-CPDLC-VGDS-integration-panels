@@ -61,7 +61,7 @@ def main() -> None:
         notify_user("Clearway is already running. Look for its icon next to the clock.")
         return
 
-    session.base_url = f"http://{lan_ip()}:{port}"
+    session.port = port                           # session.base_url follows the PC's current IP
     session.name_url = pc_name_url(port)          # the phone app moves to this one when it can reach it
     local_url = f"http://localhost:{port}/"
     open_page = lambda: webbrowser.open(local_url)  # noqa: E731

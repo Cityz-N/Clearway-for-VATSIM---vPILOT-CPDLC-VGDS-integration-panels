@@ -69,7 +69,8 @@ class Session(VpilotMixin, SelcalMixin, TsatMixin):
         self.panel_seen = 0.0
         self.panel_paused = False              # MSFS panel notifications paused (pause button)
         self.fast_until = 0.0
-        self.base_url = ""                      # http://<lan-ip>:<port>, set by the server
+        self.port = 0                           # web server port, set at start (base_url follows the current IP)
+        self._base = ("", 0.0)
         self.name_url = ""                      # http://<pc-name>.local:<port> (stays valid when the IP changes)
         self._vp_init()
         self._selcal_init()
@@ -653,6 +654,20 @@ class Session(VpilotMixin, SelcalMixin, TsatMixin):
             self._notes_path().write_text(text, encoding="utf-8")
         except OSError as exc:
             log.warning("Couldn't save notes: %s", exc)
+
+    @property
+    def base_url(self) -> str:
+        """http://<this PC's current IP>:<port>. Looked up again every 15 s rather than once at start: the IP can
+        change while Clearway runs (Wi-Fi reconnect, Windows' random hardware addresses), and a stale one makes
+        the pairing QR code and notification links point nowhere."""
+        if not self.port:
+            return ""
+        url, ts = self._base
+        if not url or time.time() - ts > 15:
+            from .server import lan_ip
+            url = f"http://{lan_ip()}:{self.port}"
+            self._base = (url, time.time())
+        return url
 
     # ------------------------------------------------------------ snapshot
     def snapshot(self) -> dict:

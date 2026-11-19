@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import ipaddress
 import json
 import logging
 import mimetypes
+import re
 import socket
 import sys
 import time
@@ -37,6 +39,22 @@ def lan_ip() -> str:
         s.close()
 
 
+ASSET_RE = re.compile(r'\b(src|href)="((?!https?:|//)[^"?#]+\.(?:js|css))"')
+_web_version = ""
+
+
+def web_version() -> str:
+    """Short hash of the web app's scripts and styles (changes whenever one of them does)."""
+    global _web_version
+    if not _web_version:
+        h = hashlib.sha1()
+        for f in sorted(web_root().rglob("*")):
+            if f.is_file() and f.suffix in (".js", ".css"):
+                h.update(f.name.encode()); h.update(f.read_bytes())
+        _web_version = h.hexdigest()[:10]
+    return _web_version
+
+
 def pc_name_url(port: int) -> str:
     """http://<pc-name>.local:<port>: the address that survives the PC getting a new IP (the phone finds the PC
     by name on the Wi-Fi, through mDNS). Empty when the PC's name can't be used that way."""
@@ -48,9 +66,30 @@ def pc_name_url(port: int) -> str:
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "Clearway"
+    # HTTP/1.1 keeps a phone's (or the panel's) connection open between its updates instead of opening a new one
+    # every 1.5 s: with the PC's .local name each new connection can cost a name lookup. Idle connections close
+    # after `timeout` seconds. Every response sends Content-Length.
+    protocol_version = "HTTP/1.1"
+    timeout = 30
     session: Session = None  # set by make_server
     keys: KeyCapture = None
     radar: Radar = None
+
+    def handle(self):
+        # Safari first tries https:// for a name like desktop-xxx.local. Clearway only speaks http, so hang up on a
+        # TLS handshake at once (first byte 0x16): Safari then moves on to http straight away instead of waiting.
+        try:
+            first = self.connection.recv(1, socket.MSG_PEEK)
+        except OSError:
+            return
+        if first == b"\x16":
+            log.debug("%s - https attempt refused (Clearway speaks http)", self.client_address[0])
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            return
+        super().handle()
 
     # Keep the console clean; errors still go to the log file.
     def log_message(self, fmt, *args):
@@ -103,6 +142,8 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         if not length:
             return {}
+        if length > 64_000:
+            self.close_connection = True       # the unread rest would spoil the next request on this connection
         raw = self.rfile.read(min(length, 64_000))
         try:
             data = json.loads(raw.decode("utf-8"))
@@ -167,12 +208,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         url = urllib.parse.urlsplit(self.path)
         query = urllib.parse.parse_qs(url.query)
+        body = self._read_body()               # always read first: the connection stays open for the next request
         if not url.path.startswith("/api/"):
             return self._json({"error": "not found"}, 404)
         if not self._authorized(query):
             return self._json({"error": "pair"}, 401)
         action = url.path[len("/api/"):]
-        body = self._read_body()
         s = self.session
         if (action.startswith("vpilot/") or action.startswith("keys/")) and not self._is_local():
             return self._json({"error": "only available on this PC"}, 403)
@@ -292,13 +333,19 @@ class Handler(BaseHTTPRequestHandler):
         if not target.is_file():
             target = root / "index.html"   # single-page app fallback
         data = target.read_bytes()
+        page = target.name == "index.html"
+        if page:
+            # Scripts and styles get an address that changes with their content (app.js?v=…), so a phone never
+            # runs scripts cached from an older Clearway with the new page (iPhones keep them despite no-cache;
+            # the old script then fails and pairing never completes).
+            data = ASSET_RE.sub(lambda m: f'{m.group(1)}="{m.group(2)}?v={web_version()}"', data.decode("utf-8")).encode("utf-8")
         ctype = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
         if target.suffix == ".webmanifest":
             ctype = "application/manifest+json"
         self.send_response(200)
         self.send_header("Content-Type", ctype + ("; charset=utf-8" if ctype.startswith("text/") or ctype.endswith("javascript") else ""))
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Cache-Control", "no-store" if page else "no-cache")
         self._cors()
         self.end_headers()
         self.wfile.write(data)
