@@ -216,7 +216,10 @@
 
   // ------------------------------------------------------------ render: shell
   function render() {
-    if (state && state.settings) el("cw-root").classList.toggle("light", state.settings.theme === "light");
+    if (state && state.settings) {
+      el("cw-root").classList.toggle("light", state.settings.theme === "light");
+      el("cw-root").classList.toggle("black", state.settings.theme === "black");
+    }
     var vpCount = reachable && state ? (state.unacked_vpilot || 0) : 0;
     var cpCount = reachable && state ? (state.unacked_cpdlc || 0) : 0;
     var bubble = el("cw-bubble");
@@ -246,6 +249,9 @@
       if (cpCount > 0) bubble.classList.add("alert");
       else if (vpMine > 0) bubble.classList.add("alert-vp");
     }
+    // start-up window open (TSAT -5 to +5 min) and not seen yet: the icon turns electric yellow-green
+    tsatAlertOn = tsatAlert();
+    if (tsatAlertOn) { bubble.classList.remove("idle"); bubble.classList.add("alert-tsat"); }
     lastVp = vpMine; lastCp = cpCount;
     el("cw-odot").classList.toggle("hidden", paused || !vpOther || vpMine > 0 || cpCount > 0);
     var cs = myCallsign(), bcs = el("cw-bub-cs");
@@ -258,6 +264,7 @@
     renderCpdlc();
     renderSelcal();
     renderNotes();
+    checkTsat();
     if (expanded) placeCard();
   }
 
@@ -1308,12 +1315,55 @@
   }
 
   // ------------------------------------------------------------ clock: UTC / sim time / local
-  var CLOCK_MODES = ["utc", "sim", "local"];
+  // 4th mode, only while Clearway has your TSAT (vIFF / VDGS): a countdown to the TSAT.
+  // Yellow before the start-up window (TSAT -5 min), green inside it (to 0:00, then up to +5:00), red after.
+  var CLOCK_MODES = ["utc", "sim", "local", "tsat"];
   var clockMode = "utc";
+  var lastTsatKey = "";
+  var tsatAlertOn = false;
+  // the icon alert for an open start-up window, until you open the card or click the clock (or the window ends)
+  function tsatAlert() {
+    var t = tsatNow();
+    if (!t || paused) return false;
+    var raw = (Date.now() - t.tsat_ms) / 1000;
+    return raw >= -300 && raw <= 300 && load("CLEARWAY_TSAT_SEEN", "") !== t.callsign + "/" + t.tsat_ms;
+  }
+  function tsatSeen() {
+    var t = tsatNow();
+    if (t) save("CLEARWAY_TSAT_SEEN", t.callsign + "/" + t.tsat_ms);
+    if (tsatAlertOn && state) render();
+  }
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function tsatNow() { return state && reachable && state.tsat && state.tsat.tsat_ms ? state.tsat : null; }
+  function clockModes() { return tsatNow() ? CLOCK_MODES : CLOCK_MODES.slice(0, 3); }
+  // a new or changed TSAT switches the clock to it; when it's gone the clock goes back to your usual one
+  function checkTsat() {
+    var t = tsatNow(), key = t ? t.callsign + "/" + t.tsat_ms : "";
+    if (key && key !== lastTsatKey) clockMode = "tsat";
+    if (!t && clockMode === "tsat") { clockMode = load("CLEARWAY_CLOCK", "utc"); if (clockMode === "tsat") clockMode = "utc"; }
+    lastTsatKey = key;
+    updateClock();
+  }
+  // yellow: time left until the start-up window opens (TSAT -5 min); green: -5:00 to 0:00 to TSAT, then up to
+  // +5:00; red: past the window (+5:01 and up, still from the TSAT)
+  function tsatText(t) {
+    var raw = Math.round((Date.now() - t.tsat_ms) / 1000), s = raw;
+    var cls = raw < -300 ? "wait" : raw <= 300 ? "go" : "late";
+    if (raw < -300) s = raw + 300;             // before the window: count down to its opening
+    var a = Math.abs(s);
+    var body = a >= 3600 ? Math.floor(a / 3600) + ":" + pad2(Math.floor(a / 60) % 60) + ":" + pad2(a % 60)
+      : Math.floor(a / 60) + ":" + pad2(a % 60);
+    return { text: (s < 0 ? "-" : "+") + body + " TSAT", cls: cls };
+  }
   function updateClock() {
-    var text, d = new Date();
-    if (clockMode === "utc") {
+    var text, d = new Date(), extra = "", c = el("cw-clock"), t = tsatNow();
+    if (clockMode === "tsat" && !t) clockMode = "utc";
+    c.title = t ? "TSAT " + t.tsat + "z (start-up window " + fmtHm(t.tsat_ms - 300000) + "-" + fmtHm(t.tsat_ms + 300000) + "z)" +
+      (t.tobt ? "  TOBT " + t.tobt : "") + (t.ttot ? "  TTOT " + t.ttot : "") + (t.ctot ? "  CTOT " + t.ctot : "") + "  - click for other clocks" : "";
+    if (clockMode === "tsat") {
+      var r = tsatText(t);
+      text = r.text; extra = " " + r.cls;
+    } else if (clockMode === "utc") {
       text = pad2(d.getUTCHours()) + ":" + pad2(d.getUTCMinutes()) + ":" + pad2(d.getUTCSeconds()) + "z";
     } else if (clockMode === "local") {
       text = pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds()) + " LT";
@@ -1327,17 +1377,19 @@
         text = "--:--:-- SIM";
       }
     }
-    var c = el("cw-clock");
     c.textContent = text;
-    c.className = "cw-clock " + clockMode;
+    c.className = "cw-clock " + clockMode + extra;
+    if (state && tsatAlert() !== tsatAlertOn) render();   // the window just opened (or ended): update the icon
   }
+  function fmtHm(ms) { var d = new Date(ms); return pad2(d.getUTCHours()) + pad2(d.getUTCMinutes()); }
 
   function setExpanded(v) {
     if (!v) releaseKeyboard();
     expanded = v;
     el("cw-card").classList.toggle("hidden", !expanded);
     save("CLEARWAY_EXPANDED", expanded);
-    el("cw-bubble").classList.toggle("idle", !expanded && !(lastVp || lastCp));
+    if (expanded) tsatSeen();                  // opening the card counts as seeing the start-up window alert
+    el("cw-bubble").classList.toggle("idle", !expanded && !(lastVp || lastCp) && !tsatAlertOn);
     if (expanded) { lastChatKey = ""; placeCard(); poll(true); }
   }
 
@@ -1672,10 +1724,12 @@
     el("cw-pause").title = paused ? "Notifications muted: click to turn them back on" : "Mute panel notifications";
     el("cw-pause").addEventListener("click", function () { setPaused(!paused); });
     clockMode = load("CLEARWAY_CLOCK", "utc");
-    if (CLOCK_MODES.indexOf(clockMode) < 0) clockMode = "utc";
+    if (CLOCK_MODES.indexOf(clockMode) < 0 || clockMode === "tsat") clockMode = "utc";
     el("cw-clock").addEventListener("click", function () {
-      clockMode = CLOCK_MODES[(CLOCK_MODES.indexOf(clockMode) + 1) % CLOCK_MODES.length];
-      save("CLEARWAY_CLOCK", clockMode);
+      var modes = clockModes();
+      clockMode = modes[(modes.indexOf(clockMode) + 1) % modes.length];
+      if (clockMode !== "tsat") save("CLEARWAY_CLOCK", clockMode);   // the TSAT clock comes back by itself
+      tsatSeen();
       updateClock();
     });
     updateClock();

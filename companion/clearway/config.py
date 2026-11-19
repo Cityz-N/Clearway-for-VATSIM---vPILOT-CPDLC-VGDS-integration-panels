@@ -45,7 +45,7 @@ DEFAULTS = {
     # Behaviour
     "adsc_enabled": True,
     "open_browser_on_start": False,   # Clearway lives in the tray; double-click to open
-    "theme": "dark",                  # "dark" or "light"
+    "theme": "dark",                  # "dark" (navy), "black" or "light"
     # vPilot plugin
     "vpilot_auto_connect": True,      # connect to Hoppie as soon as vPilot connects to VATSIM
     "vpilot_all_frequency": False,    # alert for all frequency text, not only messages that mention you
@@ -57,6 +57,7 @@ DEFAULTS = {
     # MSFS and other programs (ChasePlane...) and types them into the panel itself
     "panel_capture_keys": True,
     "simbrief_user": "",              # SimBrief username or pilot ID (SELCAL tab: latest flight plan)
+    "vdgs_tsat": True,               # read your TSAT from the vIFF / CDM network (VDGS) for the panel clock
     "config_version": 2,
     # Local web server
     "port": 8787,
@@ -114,7 +115,7 @@ class Config:
             "adsc_enabled": bool, "open_browser_on_start": bool, "theme": str,
             "vpilot_auto_connect": bool, "vpilot_all_frequency": bool,
             "vpilot_callsign": str, "vpilot_type": str, "vpilot_selcal": str, "vpilot_observer": bool,
-            "panel_capture_keys": bool, "simbrief_user": str,
+            "panel_capture_keys": bool, "simbrief_user": str, "vdgs_tsat": bool,
         }
         for key, kind in editable.items():
             if key in data:
@@ -125,7 +126,7 @@ class Config:
                     value = str(value).strip()
                     if key == "callsign_override":
                         value = value.upper()
-                    if key == "theme" and value not in ("dark", "light"):
+                    if key == "theme" and value not in ("dark", "black", "light"):
                         continue
                 self.values[key] = value
         self.save()
@@ -151,6 +152,7 @@ class Config:
             "theme": self.values.get("theme", "dark"),
             "vpilot_auto_connect": self.values.get("vpilot_auto_connect", True),
             "vpilot_all_frequency": self.values.get("vpilot_all_frequency", False),
+            "vdgs_tsat": self.values.get("vdgs_tsat", True),
             "panel_capture_keys": self.values.get("panel_capture_keys", True),
             "port": self.values.get("port"),
         }

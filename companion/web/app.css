@@ -1,9 +1,9 @@
-/* Dark theme is the default; Settings > "Light theme" switches to the pale palette. */
+/* Dark (navy) theme is the default; Settings > Theme switches to Black or Light. */
 :root {
-  --bg: #0e1117;
-  --surface: #171b23;
-  --surface-2: #1f2430;
-  --line: #2a3141;
+  --bg: #050e17;
+  --surface: #0b1826;
+  --surface-2: #142336;
+  --line: #1e3045;
   --text: #e6e9f0;
   --muted: #8a92a6;
   --accent: #7d97ff;
@@ -18,13 +18,13 @@
   --lav-soft: rgba(169, 157, 255, .14);
   --var-text: #a9bbff;
   --unread: rgba(245, 177, 76, .07);
-  --bar: rgba(14, 17, 23, .82);
-  --bar-line: rgba(42, 49, 65, .8);
-  --tabbar: rgba(23, 27, 35, .9);
-  --placeholder: #5c6478;
+  --bar: rgba(5, 14, 23, .82);
+  --bar-line: rgba(30, 48, 69, .8);
+  --tabbar: rgba(11, 24, 38, .9);
+  --placeholder: #56677c;
   --focus: #4b5fa8;
-  --track: #343b4c;
-  --dot: #4a5164;
+  --track: #27405a;
+  --dot: #3f5670;
   --banner-text: #f5c77e;
   --backdrop: rgba(0, 0, 0, .5);
   --toast-bg: #e6e9f0;
@@ -35,6 +35,18 @@
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", Inter, Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
   color-scheme: dark;
+}
+:root[data-theme="black"] {
+  --bg: #000000;
+  --surface: #0e0e0e;
+  --surface-2: #1a1a1a;
+  --line: #262626;
+  --bar: rgba(0, 0, 0, .84);
+  --bar-line: rgba(38, 38, 38, .8);
+  --tabbar: rgba(14, 14, 14, .92);
+  --placeholder: #5f5f5f;
+  --track: #333333;
+  --dot: #4a4a4a;
 }
 :root[data-theme="light"] {
   --bg: #f5f6fa;

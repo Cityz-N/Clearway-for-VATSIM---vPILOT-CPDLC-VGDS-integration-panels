@@ -17,6 +17,7 @@ from .config import Config
 from .hoppie import HoppieClient, HoppieError, Incoming, build_cpdlc, parse_cpdlc
 from .tags import classify
 from .selcal import SelcalMixin
+from .tsat import TsatMixin
 from .vpilot import FREQ, VP_KINDS, VpilotMixin
 
 log = logging.getLogger("clearway.session")
@@ -44,7 +45,7 @@ def reply_options(msg: dict) -> list[str]:
     return []
 
 
-class Session(VpilotMixin, SelcalMixin):
+class Session(VpilotMixin, SelcalMixin, TsatMixin):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.lock = threading.RLock()
@@ -71,6 +72,7 @@ class Session(VpilotMixin, SelcalMixin):
         self.base_url = ""                      # http://<lan-ip>:<port>, set by the server
         self._vp_init()
         self._selcal_init()
+        self._tsat_init()
         self._client: HoppieClient | None = None
         self._stop = threading.Event()
         self._wake = threading.Event()
@@ -686,4 +688,5 @@ class Session(VpilotMixin, SelcalMixin):
                 "base_url": self.base_url,
                 "vpilot": {**self.vpilot_snapshot(), "fp_status": self.fp_status},
                 "selcal": self.selcal_snapshot(),
+                "tsat": self.tsat,                 # TSAT start-up window (vIFF / VDGS), or None
             }

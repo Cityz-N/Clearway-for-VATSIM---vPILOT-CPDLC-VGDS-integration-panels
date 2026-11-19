@@ -1,7 +1,11 @@
 # Changelog
 
-## 1.0.1
+## 1.1.0
 
+- New **TSAT clock** in the MSFS panel. After you submit your TOBT on the VDGS website (vats.im/vdgs), Clearway reads your start-up time from the vIFF / CDM network and the clock becomes a countdown: yellow while it counts down to the opening of the start-up window, then green from -5:00 to 0:00 (your TSAT) and up to +5:00, then red. Hover it for TSAT, window, TOBT, TTOT and CTOT. Click it to switch to the other clocks as before; it switches to the TSAT clock by itself when a new TSAT arrives and goes back to your usual clock after take-off or when you disconnect
+- TSAT clock: when the start-up window opens, the floating icon turns electric yellow-green until you open the card or click the clock (not while notifications are muted)
+- New **Dark** theme colours (navy, #050e17) and a new **Black** theme. Settings > Theme: Dark, Black or Light (phone, PC and MSFS panel)
+- TSAT clock: Clearway only asks while vPilot is connected (not as an observer) and you're on the ground with a flight plan: once every 3 minutes until a TSAT is set, then no more, or once a minute if your flight has a CTOT. Only your own flight is kept. It needs your VATSIM CID in Settings, which is sent as the request's User-Agent. It can be switched off in Clearway's settings
 - MSFS panel: accents and symbols no longer show as empty boxes in MSFS 2024. The panel and the radar now use the bundled Selawik font (Microsoft's open version of Segoe UI, SIL Open Font License)
 - MSFS panel: the floating icon turns cyan only for vPilot messages meant for you (private messages, SELCAL, frequency text with your callsign). Other unread messages (broadcasts) show a small grey dot at its bottom left. Hover the faint icon to see your callsign
 - MSFS panel: the faint icon is yellow while you're not connected to VATSIM

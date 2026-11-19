@@ -15,6 +15,7 @@ A small Windows companion app feeds an in-game MSFS toolbar panel (a floating ic
 | | |
 |---|---|
 | **vPilot** | Frequency and private chats, nearby ATC and ATIS, connect or observe, transponder, dot commands. Warns when your flight plan isn't filed |
+| **TSAT clock** (MSFS panel) | After you submit your TOBT at vats.im/vdgs, the panel clock counts down to your start-up window (yellow, green inside the window, red when late) |
 | **CPDLC** (Hoppie) | Logon, departure and oceanic clearances, requests, one-tap WILCO / UNABLE, automatic ADS-C |
 | **SELCAL** | Codes no one on VATSIM is using, SimBrief import, check any code |
 | **Radar** (MSFS panel) | Live VATSIM traffic, controllers and sectors, airport info. Detach it into its own window |

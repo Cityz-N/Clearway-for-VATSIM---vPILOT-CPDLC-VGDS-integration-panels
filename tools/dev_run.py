@@ -17,12 +17,15 @@ os.environ["CLEARWAY_DATA_DIR"] = str(DATA)
 # The test Clearway never holds the real keyboard (a panel field focused in a browser would otherwise make it
 # swallow keys typed into a running MSFS). Set CLEARWAY_KEY_TARGETS yourself to test the keyboard hook.
 os.environ.setdefault("CLEARWAY_KEY_TARGETS", "no-such-program-dev-run.exe")
+# TSAT clock: never ask the real vIFF server from the test Clearway; tools/mock_viff.py answers on 8792
+os.environ.setdefault("CLEARWAY_VIFF_URL", "http://127.0.0.1:8792")
 
 cfg_file = DATA / "config.json"
 cfg = json.loads(cfg_file.read_text()) if cfg_file.exists() else {}
 cfg.update({
     "hoppie_logon": cfg.get("hoppie_logon") or "TESTLOGON123",
     "callsign_override": cfg.get("callsign_override") or "BAW117",
+    "vatsim_cid": cfg.get("vatsim_cid") or "1000000",     # a made-up CID (TSAT User-Agent test)
     "hoppie_url": "http://127.0.0.1:8790/connect.html",
     "ntfy_enabled": False,
     # a separate port, so a real vPilot/Clearway plugin on 8787 never talks to the test server

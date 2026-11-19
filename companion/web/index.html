@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0e1117" id="themeColor">
+  <meta name="theme-color" content="#050e17" id="themeColor">
   <script>
     // apply the saved theme before first paint (no white flash)
-    try { if (localStorage.getItem("clearway.theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}
+    try { var t = localStorage.getItem("clearway.theme"); if (t === "light" || t === "black") document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -357,13 +357,15 @@
         <div class="toggle-row"><span><span class="dot" id="vpDot" style="display:inline-block;margin-right:8px;vertical-align:middle"></span><span id="vpStatus" class="small-text"></span></span></div>
         <div class="toggle-row"><span>Connect to Hoppie automatically when vPilot connects</span><label class="switch"><input type="checkbox" id="setVpAuto"><i></i></label></div>
         <div class="toggle-row"><span>Alert me for all frequency text <span class="muted">(otherwise only messages that mention you)</span></span><label class="switch"><input type="checkbox" id="setVpAll"><i></i></label></div>
+        <div class="toggle-row"><span>TSAT clock in the MSFS panel <span class="muted">(after you submit your TOBT at vats.im/vdgs, Clearway reads your start-up time from the vIFF / CDM network. Needs your VATSIM CID above, which it sends with each request)</span></span><label class="switch"><input type="checkbox" id="setTsat"><i></i></label></div>
         <p class="muted small-text">Private messages, frequency text that mentions you, broadcasts and SELCAL alerts from vPilot appear here and on your phone. To install, close vPilot, copy <code>Clearway.vPilot.dll</code> into vPilot's <code>Plugins</code> folder (vPilot shortcut &gt; Open file location &gt; Plugins), then right-click the DLL &gt; <b>Properties</b> &gt; tick <b>Unblock</b>, and start vPilot again. A blocked plugin is silently ignored by vPilot.</p>
       </div>
 
       <div class="card">
         <h2>Options</h2>        <div class="toggle-row"><span>Answer ADS-C position requests automatically</span><label class="switch"><input type="checkbox" id="setAdsc"><i></i></label></div>
         <div class="toggle-row"><span>MSFS panel: keep typed keys away from the sim and other programs <span class="muted">(ChasePlane, sim key bindings) while you type in the panel</span></span><label class="switch"><input type="checkbox" id="setKeys"><i></i></label></div>
-        <div class="toggle-row"><span>Light theme <span class="muted">(phone, PC and MSFS panel)</span></span><label class="switch"><input type="checkbox" id="setLight"><i></i></label></div>
+        <div class="toggle-row"><span>Theme <span class="muted">(phone, PC and MSFS panel)</span></span></div>
+        <div class="seg" id="setTheme"><button type="button" data-theme="dark">Dark</button><button type="button" data-theme="black">Black</button><button type="button" data-theme="light">Light</button></div>
         <div class="toggle-row"><span>Open this page when Clearway starts <span class="muted">(otherwise double-click the tray icon)</span></span><label class="switch"><input type="checkbox" id="setBrowser"><i></i></label></div>
       </div>
 

@@ -191,18 +191,19 @@
     fill("ocnLevel", (f.cruise || "").replace(/^FL/i, "").slice(0, 3));
   }
 
+  // dark (navy, default), black or light
   function applyTheme(theme) {
-    const light = theme === "light";
-    if (light) document.documentElement.dataset.theme = "light";
-    else delete document.documentElement.dataset.theme;
-    $("themeColor").content = light ? "#f5f6fa" : "#0e1117";
-    try { localStorage.setItem("clearway.theme", light ? "light" : "dark"); } catch (e) {}
+    const t = theme === "light" || theme === "black" ? theme : "dark";
+    if (t === "dark") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = t;
+    $("themeColor").content = { dark: "#050e17", black: "#000000", light: "#f5f6fa" }[t];
+    document.querySelectorAll("#setTheme button").forEach((b) => b.classList.toggle("on", b.dataset.theme === t));
+    try { localStorage.setItem("clearway.theme", t); } catch (e) {}
   }
 
   function renderSettings() {
     const s = state, st = s.settings;
     applyTheme(st.theme);
-    $("setLight").checked = st.theme === "light";
     const titles = { offline: "Offline", connecting: "Connecting…", online: "Connected", error: "Couldn't connect" };
     $("statusTitle").textContent = titles[s.status] + (s.status === "online" ? ` as ${s.callsign}` : "");
     let detail = s.error || "Enter your details below, then connect.";
@@ -228,6 +229,7 @@
     $("setBrowser").checked = st.open_browser_on_start;
     $("setVpAuto").checked = st.vpilot_auto_connect;
     $("setVpAll").checked = st.vpilot_all_frequency;
+    $("setTsat").checked = st.vdgs_tsat !== false;
     $("setKeys").checked = st.panel_capture_keys;
     const vp = s.vpilot || {};
     $("vpStatus").textContent = !vp.active ? "vPilot not opened / plugin not found. Start vPilot, with the plugin installed."
@@ -402,9 +404,11 @@
     if (ok) { settingsDirty = false; $("setLogon").value = ""; }
   };
   const toggles = { setNtfy: "ntfy_enabled", setMute: "mute_phone_when_panel_open", setAdsc: "adsc_enabled", setBrowser: "open_browser_on_start",
-    setVpAuto: "vpilot_auto_connect", setVpAll: "vpilot_all_frequency", setKeys: "panel_capture_keys" };
+    setVpAuto: "vpilot_auto_connect", setVpAll: "vpilot_all_frequency", setTsat: "vdgs_tsat", setKeys: "panel_capture_keys" };
   Object.entries(toggles).forEach(([id, k]) => $(id).addEventListener("change", (e) => act("settings", { [k]: e.target.checked })));
-  $("setLight").addEventListener("change", (e) => { applyTheme(e.target.checked ? "light" : "dark"); act("settings", { theme: e.target.checked ? "light" : "dark" }); });
+  document.querySelectorAll("#setTheme button").forEach((b) => b.addEventListener("click", () => {
+    applyTheme(b.dataset.theme); act("settings", { theme: b.dataset.theme });
+  }));
 
   $("copyTopic").onclick = async () => {
     try { await navigator.clipboard.writeText(state.settings.ntfy_topic); toast("Topic copied"); }

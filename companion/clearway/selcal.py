@@ -211,19 +211,21 @@ class SelcalMixin:
             used: dict[str, list] = {}
             pilots: dict[str, bool] = {}
             prefiles: set[str] = set()
+            moving: dict[str, dict] = {}           # online pilots: departure airport and ground speed (TSAT check)
             for where, items in (("online", data.get("pilots", [])), ("prefiled", data.get("prefiles", []))):
                 for p in items:
                     cs = str(p.get("callsign", "")).upper()
                     fp = p.get("flight_plan") or {}
                     if where == "online":
                         pilots[cs] = bool(fp)
+                        moving[cs] = {"dep": str(fp.get("departure") or "").upper(), "gs": p.get("groundspeed") or 0}
                     else:
                         prefiles.add(cs)
                     m = SEL_RE.search(str(fp.get("remarks", "")).upper())
                     code = parse_code(m.group(1)) if m else None
                     if code:
                         used.setdefault(code_key(code), []).append({"callsign": cs, "code": code, "where": where})
-            self._feed = {"ts": time.time(), "used": used, "pilots": pilots, "prefiles": prefiles,
+            self._feed = {"ts": time.time(), "used": used, "pilots": pilots, "prefiles": prefiles, "moving": moving,
                           "count": len(pilots) + len(prefiles)}
             self._feed_error = ""
         with self.lock:

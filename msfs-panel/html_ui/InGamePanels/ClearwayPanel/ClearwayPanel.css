@@ -25,10 +25,11 @@ ingame-ui#ClearwayPanel .ingameUiContent,
 ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0; background: transparent; }
 
 #cw-root {
-  --bg: #12161d;
-  --surface: #1a1f28;
-  --surface-2: #232937;
-  --line: #2c3343;
+  /* dark theme: navy (1.1.0) */
+  --bg: #050e17;
+  --surface: #0b1826;
+  --surface-2: #142336;
+  --line: #1e3045;
   --text: #e6e9f0;
   --muted: #8a92a6;
   --accent: #7d97ff;
@@ -43,8 +44,8 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
   --lav: #a99dff;
   --lav-soft: rgba(169, 157, 255, 0.16);
   --unread: #241f17;
-  --bubble: #1a1f28;
-  --bubble-line: #343c4e;
+  --bubble: #0b1826;
+  --bubble-line: #27405a;
   --glyph-off: #5c6478;
   --on-accent: #0b1020;
   --shadow: rgba(0, 0, 0, 0.5);
@@ -79,6 +80,16 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
   --glyph-off: #b5bccc;
   --on-accent: #ffffff;
   --shadow: rgba(25, 35, 70, 0.2);
+}
+/* black theme: the dark palette in neutral greys on pure black */
+#cw-root.black {
+  --bg: #000000;
+  --surface: #0e0e0e;
+  --surface-2: #1a1a1a;
+  --line: #262626;
+  --bubble: #0e0e0e;
+  --bubble-line: #333333;
+  --unread: #1f1a12;
 }
 .hidden { display: none !important; }
 
@@ -701,3 +712,12 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 #cw-notes-head { display: flex; justify-content: flex-end; margin: -0.25em 0 0.3em; }
 #cw-notes-cs { font-size: 0.8em; font-weight: bold; letter-spacing: 0.05em; color: var(--vp); }
 .cw-fontload { position: absolute; left: -100px; top: -100px; width: 10px; height: 10px; overflow: hidden; opacity: 0.01; font-family: "Selawik", sans-serif; }
+
+/* ---------------- 1.1.0: TSAT clock (countdown to the start-up window) ---------------- */
+.cw-clock.tsat.wait { color: #f2cf3a; }   /* before the window (TSAT -5 min) */
+.cw-clock.tsat.go { color: #4fe08f; }     /* inside the window, TSAT -5 to +5 min */
+.cw-clock.tsat.late { color: #ff6b6b; }   /* after TSAT +5 min */
+.cw-clock.tsat { font-weight: bold; }
+/* start-up window open (TSAT -5 to +5 min), not seen yet: electric yellow-green icon */
+#cw-bubble.alert-tsat { background-color: #c6ff1a; border-color: #eaff8a; box-shadow: 0 0 1.1em rgba(198, 255, 26, 0.55); opacity: 1; }
+#cw-bubble.alert-tsat .cw-glyph { fill: #1c2600; }
