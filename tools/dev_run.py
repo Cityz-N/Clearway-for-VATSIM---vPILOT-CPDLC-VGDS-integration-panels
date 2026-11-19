@@ -19,6 +19,8 @@ os.environ["CLEARWAY_DATA_DIR"] = str(DATA)
 os.environ.setdefault("CLEARWAY_KEY_TARGETS", "no-such-program-dev-run.exe")
 # TSAT clock: never ask the real vIFF server from the test Clearway; tools/mock_viff.py answers on 8792
 os.environ.setdefault("CLEARWAY_VIFF_URL", "http://127.0.0.1:8792")
+# "quit when vPilot closes" watches a process name nobody runs, so the test Clearway never follows the real vPilot
+os.environ.setdefault("CLEARWAY_VPILOT_EXE", "no-such-vpilot-dev-run.exe")
 
 cfg_file = DATA / "config.json"
 cfg = json.loads(cfg_file.read_text()) if cfg_file.exists() else {}

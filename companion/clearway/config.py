@@ -53,6 +53,7 @@ DEFAULTS = {
     "vpilot_type": "",
     "vpilot_selcal": "",
     "vpilot_observer": False,         # last "connect as observer" choice
+    "quit_with_vpilot": True,         # quit Clearway when vPilot closes (only if vPilot ran during this session)
     # MSFS panel: while a panel text field has the cursor, Clearway holds back key presses from
     # MSFS and other programs (ChasePlane...) and types them into the panel itself
     "panel_capture_keys": True,
@@ -115,7 +116,7 @@ class Config:
             "adsc_enabled": bool, "open_browser_on_start": bool, "theme": str,
             "vpilot_auto_connect": bool, "vpilot_all_frequency": bool,
             "vpilot_callsign": str, "vpilot_type": str, "vpilot_selcal": str, "vpilot_observer": bool,
-            "panel_capture_keys": bool, "simbrief_user": str, "vdgs_tsat": bool,
+            "panel_capture_keys": bool, "simbrief_user": str, "vdgs_tsat": bool, "quit_with_vpilot": bool,
         }
         for key, kind in editable.items():
             if key in data:
@@ -153,6 +154,7 @@ class Config:
             "vpilot_auto_connect": self.values.get("vpilot_auto_connect", True),
             "vpilot_all_frequency": self.values.get("vpilot_all_frequency", False),
             "vdgs_tsat": self.values.get("vdgs_tsat", True),
+            "quit_with_vpilot": self.values.get("quit_with_vpilot", True),
             "panel_capture_keys": self.values.get("panel_capture_keys", True),
             "port": self.values.get("port"),
         }

@@ -258,6 +258,7 @@
     $("setVpAuto").checked = st.vpilot_auto_connect;
     $("setVpAll").checked = st.vpilot_all_frequency;
     $("setTsat").checked = st.vdgs_tsat !== false;
+    $("setQuitVp").checked = st.quit_with_vpilot !== false;
     $("setKeys").checked = st.panel_capture_keys;
     const vp = s.vpilot || {};
     $("vpStatus").textContent = !vp.active ? "vPilot not opened / plugin not found. Start vPilot, with the plugin installed."
@@ -432,7 +433,7 @@
     if (ok) { settingsDirty = false; $("setLogon").value = ""; }
   };
   const toggles = { setNtfy: "ntfy_enabled", setMute: "mute_phone_when_panel_open", setAdsc: "adsc_enabled", setBrowser: "open_browser_on_start",
-    setVpAuto: "vpilot_auto_connect", setVpAll: "vpilot_all_frequency", setTsat: "vdgs_tsat", setKeys: "panel_capture_keys" };
+    setVpAuto: "vpilot_auto_connect", setVpAll: "vpilot_all_frequency", setTsat: "vdgs_tsat", setQuitVp: "quit_with_vpilot", setKeys: "panel_capture_keys" };
   Object.entries(toggles).forEach(([id, k]) => $(id).addEventListener("change", (e) => act("settings", { [k]: e.target.checked })));
   document.querySelectorAll("#setTheme button").forEach((b) => b.addEventListener("click", () => {
     applyTheme(b.dataset.theme); act("settings", { theme: b.dataset.theme });

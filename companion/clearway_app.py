@@ -17,7 +17,30 @@ import webbrowser
 from clearway import __version__
 from clearway.config import Config, data_dir
 from clearway.server import lan_ip, make_server, pc_name_url, web_root
+from clearway.procs import claim_single_instance, process_running
 from clearway.session import Session
+
+VPILOT_EXE = os.environ.get("CLEARWAY_VPILOT_EXE", "vPilot.exe")
+
+
+def watch_vpilot(cfg: Config, on_quit) -> None:
+    """Quit Clearway when vPilot closes (setting "quit_with_vpilot"), but only once vPilot has been seen running
+    in this session: Clearway on its own (CPDLC only) keeps running. Checked every 5 s, closed for 10 s."""
+    log = logging.getLogger("clearway")
+    seen, missing = False, 0
+    while True:
+        threading.Event().wait(5)
+        running = process_running(VPILOT_EXE)
+        if running is None:
+            return                                  # can't check processes here
+        if running:
+            seen, missing = True, 0
+            continue
+        missing += 1
+        if seen and missing >= 2 and cfg.get("quit_with_vpilot"):
+            log.info("vPilot closed: Clearway quits too")
+            on_quit()
+            return
 
 
 def setup_logging() -> None:
@@ -53,8 +76,13 @@ def main() -> None:
     setup_logging()
     log = logging.getLogger("clearway")
     cfg = Config()
-    session = Session(cfg)
     port = int(cfg.get("port") or 8787)
+    # one Clearway at a time (per port): checked before anything starts (Hoppie, vPilot, radar...)
+    if not claim_single_instance(f"Clearway-{port}"):
+        log.info("Clearway is already running: this second copy closes")
+        notify_user("Clearway is already running. Look for its icon next to the clock.")
+        return
+    session = Session(cfg)
     try:
         server = make_server(session, port)
     except OSError:
@@ -75,6 +103,7 @@ def main() -> None:
     use_tray = os.name == "nt" and "--console" not in sys.argv
     if not use_tray:
         print(f"\n  Clearway {__version__} - open {local_url}\n  Keep this window open while you fly. Ctrl+C to quit.\n")
+        threading.Thread(target=watch_vpilot, args=(cfg, server.shutdown), daemon=True, name="vpilot-watch").start()
         try:
             server.serve_forever()
         except KeyboardInterrupt:
@@ -120,6 +149,7 @@ def main() -> None:
 
     icon = str(web_root() / "clearway.ico")
     tray = TrayIcon(icon, tooltip, menu, open_page)
+    threading.Thread(target=watch_vpilot, args=(cfg, quit_app), daemon=True, name="vpilot-watch").start()
     try:
         tray.run(balloon=None if first_run else "Clearway is running. Double-click this icon to open it.")
     except Exception:

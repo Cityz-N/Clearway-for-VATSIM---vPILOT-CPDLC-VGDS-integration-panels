@@ -351,10 +351,21 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
+class _Server(ThreadingHTTPServer):
+    """The port belongs to one Clearway only. Python's default (SO_REUSEADDR) lets a second program bind the same
+    port on Windows, which is how two Clearways could run side by side."""
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def make_server(session: Session, port: int) -> ThreadingHTTPServer:
     Handler.session = session
     Handler.keys = KeyCapture(enabled=lambda: session.cfg.get("panel_capture_keys"))
     Handler.radar = Radar(session)
-    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    server = _Server(("0.0.0.0", port), Handler)
     server.daemon_threads = True
     return server
