@@ -70,6 +70,7 @@ class Session(VpilotMixin, SelcalMixin, TsatMixin):
         self.panel_paused = False              # MSFS panel notifications paused (pause button)
         self.fast_until = 0.0
         self.base_url = ""                      # http://<lan-ip>:<port>, set by the server
+        self.name_url = ""                      # http://<pc-name>.local:<port> (stays valid when the IP changes)
         self._vp_init()
         self._selcal_init()
         self._tsat_init()
@@ -686,6 +687,7 @@ class Session(VpilotMixin, SelcalMixin, TsatMixin):
                           for m in reversed(self.trash) if m["dir"] != "sys"],
                 "settings": self.cfg.public(),
                 "base_url": self.base_url,
+                "name_url": self.name_url,
                 "vpilot": {**self.vpilot_snapshot(), "fp_status": self.fp_status},
                 "selcal": self.selcal_snapshot(),
                 "tsat": self.tsat,                 # TSAT start-up window (vIFF / VDGS), or None

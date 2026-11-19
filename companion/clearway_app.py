@@ -16,7 +16,7 @@ import webbrowser
 
 from clearway import __version__
 from clearway.config import Config, data_dir
-from clearway.server import lan_ip, make_server, web_root
+from clearway.server import lan_ip, make_server, pc_name_url, web_root
 from clearway.session import Session
 
 
@@ -62,6 +62,7 @@ def main() -> None:
         return
 
     session.base_url = f"http://{lan_ip()}:{port}"
+    session.name_url = pc_name_url(port)          # the phone app moves to this one when it can reach it
     local_url = f"http://localhost:{port}/"
     open_page = lambda: webbrowser.open(local_url)  # noqa: E731
     log.info("Clearway %s running on %s (phone: %s)", __version__, local_url, session.base_url)

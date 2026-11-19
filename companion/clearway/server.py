@@ -37,6 +37,15 @@ def lan_ip() -> str:
         s.close()
 
 
+def pc_name_url(port: int) -> str:
+    """http://<pc-name>.local:<port>: the address that survives the PC getting a new IP (the phone finds the PC
+    by name on the Wi-Fi, through mDNS). Empty when the PC's name can't be used that way."""
+    name = socket.gethostname().split(".")[0].lower()
+    if not name or len(name) > 63 or not all(c.isalnum() or c == "-" for c in name) or name.startswith("-"):
+        return ""
+    return f"http://{name}.local:{port}"
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "Clearway"
     session: Session = None  # set by make_server
@@ -110,6 +119,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urllib.parse.urlsplit(self.path)
         query = urllib.parse.parse_qs(url.query)
+        if url.path == "/api/hello":
+            # the phone app checks whether it can reach this Clearway by the PC's name (and that it's the
+            # same one: "paired" only with the right pairing key)
+            return self._json({"app": "clearway", "paired": self._authorized(query)})
         if url.path == "/api/state":
             if not self._authorized(query):
                 return self._json({"error": "pair"}, 401)

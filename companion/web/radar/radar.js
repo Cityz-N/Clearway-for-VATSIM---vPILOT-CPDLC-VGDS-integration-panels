@@ -457,12 +457,12 @@
     ctx.fill();
     if (!showText) return;
     ctx.font = "9px Selawik, 'Roboto-Regular', Roboto, 'Segoe UI', Arial, sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.textAlign = "center"; ctx.textBaseline = "bottom";
     ctx.fillStyle = "rgba(170,188,208,0.5)";
     for (var i = 0; i < apHits.length; i++) {
       a = apHits[i];
-      if (opts.atc && atc && findAtcAirport(a.icao)) continue;   // the ATC badge already names it
-      ctx.fillText(a.icao, a.x, a.y + 4);
+      if (opts.atc && atc && findAtcAirport(a.icao)) continue;   // drawn with its ATC badges
+      ctx.fillText(a.icao, a.x, a.y - 3);                          // the name above the dot
     }
     ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
   }
@@ -533,8 +533,11 @@
         var b = BADGES[j];
         if (a.types[b[0]] || (b[0] === "APP" && a.types.DEP) || (b[0] === "GND" && a.types.RMP)) list.push(b);
       }
-      var w = list.length * 12 + 2;
-      bx = Math.round(x - w / 2); by = Math.round(y - 6);
+      // the airport dot, its controller badges just under it and (zoomed in) its name above it
+      var w = list.length * 12 + 2, named = view.z >= 6;
+      bx = Math.round(x - w / 2); by = Math.round(y + 5);
+      ctx.fillStyle = "#c7d2df";
+      ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "rgba(11,14,19,0.9)";
       ctx.fillRect(bx - 1, by - 1, w + 2, 14);
       for (j = 0; j < list.length; j++) {
@@ -543,12 +546,13 @@
         ctx.fillStyle = "#0b0e13";
         ctx.fillText(list[j][1], bx + 6.5 + j * 12, by + 6.5);
       }
-      if (view.z >= 6) {
+      if (named) {
         ctx.fillStyle = "#c7d2df";
-        ctx.fillText(a.icao, x, by + 20);
+        ctx.fillText(a.icao, x, y - 9);
       }
-      gridAdd(bx - 1, by - 1, w + 2, view.z >= 6 ? 26 : 14);
-      badgeHits.push([bx - 2, by - 2, w + 4, 16, a]);
+      var top = named ? y - 16 : y - 4;
+      gridAdd(bx - 1, top, w + 2, by + 13 - top);
+      badgeHits.push([bx - 2, top, w + 4, by + 14 - top, a]);
     }
     ctx.textAlign = "left";
   }

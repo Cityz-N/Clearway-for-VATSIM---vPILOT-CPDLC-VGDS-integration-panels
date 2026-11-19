@@ -707,7 +707,7 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 /* my callsign under the icon, while hovering the faint (idle) icon */
 .cw-bub-cs { display: none; position: absolute; top: 100%; left: 50%; width: 8em; margin: 0.35em 0 0 -4em; text-align: center; }
 #cw-bubble.idle:hover .cw-bub-cs { display: block; }
-.cw-bub-cs { font-size: 0.8em; font-weight: bold; letter-spacing: 0.04em; color: #00d8d4; text-shadow: 0 1px 3px #000, 0 0 2px #000; }
+.cw-bub-cs { font-size: 0.8em; font-weight: bold; letter-spacing: 0.04em; color: #e8edf3; text-shadow: 0 1px 3px #000, 0 0 2px #000; }
 /* notepad: my callsign, always visible in a slim header */
 #cw-notes-head { display: flex; justify-content: flex-end; margin: -0.25em 0 0.3em; }
 #cw-notes-cs { font-size: 0.8em; font-weight: bold; letter-spacing: 0.05em; color: var(--vp); }

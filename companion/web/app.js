@@ -23,6 +23,33 @@
     history.replaceState(null, "", `${location.pathname}?k=${encodeURIComponent(key)}${location.hash}`);
   }
 
+  // ---------- the PC's name instead of its IP ----------
+  // The QR code holds the PC's IP, which can change from one day to the next (new DHCP lease, random Wi-Fi
+  // hardware address), and a home-screen app saved with the old IP then can't connect. When this phone can
+  // reach the same Clearway by the PC's name (http://<pc-name>.local), move there: that address stays valid.
+  // Phones that can't resolve .local names stay on the IP. Tried once per page load, and not again for 6 h
+  // after a failure.
+  const movedHere = params.get("moved") === "1";
+  if (movedHere && key) history.replaceState(null, "", `${location.pathname}?k=${encodeURIComponent(key)}${location.hash}`);
+  if (movedHere) setTimeout(() => toast("Now using your PC's name: add this page to your home screen again, it keeps working when the PC's address changes.", false, 8000), 900);
+  let nameTried = false;
+  async function tryNameAddress(nameUrl) {
+    if (nameTried || !nameUrl || !key || !/^\d{1,3}(\.\d{1,3}){3}$/.test(location.hostname)) return;
+    nameTried = true;
+    try { if (Date.now() - Number(localStorage.getItem("clearway.nameFail") || 0) < 6 * 3600e3) return; } catch (e) {}
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 3000);
+    try {
+      const r = await fetch(`${nameUrl}/api/hello?k=${encodeURIComponent(key)}`, { signal: ctl.signal, cache: "no-store" });
+      const d = await r.json();
+      if (d.app === "clearway" && d.paired) {
+        location.replace(`${nameUrl}/?k=${encodeURIComponent(key)}&moved=1${location.hash}`);
+        return;
+      }
+    } catch (e) { /* this phone can't resolve the name: keep the IP */ }
+    finally { clearTimeout(timer); }
+    try { localStorage.setItem("clearway.nameFail", String(Date.now())); } catch (e) {}
+  }
+
   const VP = new Set(["pm", "radio", "broadcast", "selcal", "vinfo", "vsys"]);   // vPilot tab
   const KIND_LABEL = { cpdlc: "CPDLC", telex: "Telex", info: "Info", pm: "Message", radio: "Freq", broadcast: "Broadcast", selcal: "SELCAL" };
   let state = null;
@@ -66,6 +93,7 @@
       version = data.version;
       state = data;
       render();
+      tryNameAddress(data.name_url);
     } catch (e) {
       setDot("error");
       $("sub").textContent = "Companion not reachable";
@@ -78,13 +106,13 @@
   // Hoppie marks variable fields with @…@; show them as soft highlights.
   const fmt = (t) => esc(t).replace(/@([^@\n]*)@/g, (_, v) => v.trim() ? `<span class="var">${v}</span>` : "").replace(/@/g, "\n");
 
-  function toast(text, err) {
+  function toast(text, err, ms) {
     const t = $("toast");
     t.textContent = text;
     t.className = "toast" + (err ? " err" : "");
     t.hidden = false;
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => (t.hidden = true), 2800);
+    toast._t = setTimeout(() => (t.hidden = true), ms || 2800);
   }
   function setDot(s) { $("statusDot").className = "dot " + s; }
 
