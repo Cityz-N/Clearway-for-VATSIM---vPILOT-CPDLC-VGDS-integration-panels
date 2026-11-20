@@ -59,6 +59,40 @@ class VpilotMixin:
         self._next_out = 1
         self._outbox_event = threading.Event()   # wakes a waiting plugin request instantly
         self.com: dict | None = None             # COM radios, read by the MSFS panel
+        self.vpilot_running: bool | None = None  # vPilot.exe open on this PC (None = not checked yet)
+        self._vp_starting = 0.0                  # vPilot launched from the panel at this time
+        self.vpilot_proc_wake = threading.Event()   # asks the process watcher to look again now
+
+    # ------------------------------------------------------------ vPilot program (start button in the panel)
+    def set_vpilot_running(self, running: bool) -> None:
+        if running != self.vpilot_running:
+            with self.lock:
+                self.vpilot_running = running
+                if running:
+                    self._vp_starting = 0.0
+                self._bump()
+
+    def vpilot_launch(self) -> str:
+        """Start vPilot minimized in the background. Returns '' or a reason it couldn't."""
+        from clearway.procs import find_vpilot, launch_background
+        if self.vpilot_running:
+            return "vPilot is already open"
+        if time.time() - self._vp_starting < 30:
+            return "vPilot is starting..."
+        path = find_vpilot(str(self.cfg.get("vpilot_path") or ""))
+        if not path:
+            return "vPilot not found on this PC: open it once yourself so Clearway learns where it is"
+        try:
+            launch_background(path)
+        except OSError as exc:
+            log.warning("Couldn't start vPilot: %s", exc)
+            return "Couldn't start vPilot"
+        log.info("vPilot started from the panel: %s", path)
+        with self.lock:
+            self._vp_starting = time.time()
+            self._bump()
+        threading.Timer(3, self.vpilot_proc_wake.set).start()   # green as soon as it's up
+        return ""
 
     # ------------------------------------------------------------ plugin side
     def vpilot_active(self) -> bool:
@@ -407,6 +441,8 @@ class VpilotMixin:
             ctrls.append(item)
         ctrls.sort(key=lambda c: (c.get("distance", 99999), c["callsign"]))
         return {
+            "running": True if self.vpilot_active() else self.vpilot_running,   # vPilot.exe open (None: unknown)
+            "starting": not self.vpilot_running and time.time() - self._vp_starting < 30,
             "active": self.vpilot_active(),
             # without a plugin heartbeat the last known state is stale: report "not connected"
             "connected": self.vpilot_connected and self.vpilot_active(),

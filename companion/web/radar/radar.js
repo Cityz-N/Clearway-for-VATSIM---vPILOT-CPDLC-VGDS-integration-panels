@@ -34,7 +34,8 @@
   // display size: "auto" follows the screen height (1080p = 1x, 1440p = 1.33x, 4K = 2x); the others force a size
   var SIZES = { "1080p": 1, "1440p": 1.333, "4K": 2 }, SIZE_ORDER = ["auto", "1080p", "1440p", "4K"];
   var SIZE_LABEL = { "auto": "AUTO", "1080p": "1080p", "1440p": "1440p", "4K": "4K" };
-  var pilots = [];        // {cs, mx, my, alt, gs, hdg, type, freq, dep, arr, sq, kind}
+  var pilots = [];        // {cs, mx, my, alt, gs, hdg, type, freq, dep, arr, sq, kind, vs}
+  var altHist = {};       // callsign -> {alt, t, vs}: last altitude seen, for the vertical speed
   var atc = null;         // processed controller data
   var atcVer = "";
   var trafficAps = {};    // ICAO -> airport used by traffic {mx, my, name, nArr, nDep}
@@ -134,12 +135,20 @@
       loadingMsg = "";
       if (d && d.pilots) {
         serverMe = d.me || null;    // from the vPilot plugin: { cs, obs }
-        var out = [], i, p;
+        var out = [], i, p, now = Date.now(), hist = {};
         for (i = 0; i < d.pilots.length; i++) {
           p = d.pilots[i];
+          // vertical speed from the altitude change between VATSIM updates (the data refreshes every ~15 s, so an
+          // unchanged altitude only counts as level after 25 s)
+          var h = altHist[p[0]], vs = null;
+          if (!h) h = { alt: p[3], t: now, vs: null };
+          else if (p[3] !== h.alt) { vs = (p[3] - h.alt) / Math.max(0.1, (now - h.t) / 60000); h = { alt: p[3], t: now, vs: vs }; }
+          else vs = now - h.t > 25000 ? 0 : h.vs;
+          hist[p[0]] = h;
           out.push({ cs: p[0], mx: mercX(p[2]), my: mercY(p[1]), lat: p[1], lon: p[2], alt: p[3], gs: p[4], hdg: p[5],
-                     type: p[6], freq: p[7], dep: p[8], arr: p[9], sq: p[10], kind: kindOf(p[6]) });
+                     type: p[6], freq: p[7], dep: p[8], arr: p[9], sq: p[10], kind: kindOf(p[6]), vs: vs });
         }
+        altHist = hist;
         pilots = out;
         // airports used as departure or destination, with counts
         var aps = {}, k, a;
@@ -646,8 +655,15 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   }
 
+  // VATSIM reports true altitude, which drifts a few hundred feet from the flight level with temperature (FL360
+  // shows as 35800). Above 18000 ft a level aircraft (or one not yet seen moving) shows its round flight level;
+  // climbing or descending ones (500 fpm or more) keep the exact value.
   function altText(p) {
-    if (p.alt >= 18000) { var fl = Math.round(p.alt / 100); return "FL" + (fl < 100 ? "0" : "") + fl; }
+    if (p.alt >= 18000) {
+      var level = p.vs == null || Math.abs(p.vs) < 500;
+      var fl = level ? Math.round(p.alt / 1000) * 10 : Math.round(p.alt / 100);
+      return "FL" + (fl < 100 ? "0" : "") + fl;
+    }
     return (Math.round(p.alt / 100) * 100) + "ft";
   }
 

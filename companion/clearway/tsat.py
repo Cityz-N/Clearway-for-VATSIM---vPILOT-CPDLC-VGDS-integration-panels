@@ -117,20 +117,28 @@ class TsatMixin:
             cdm = mine.get("cdmData") or {}
             now = time.time()
             tsat = str(cdm.get("tsat") or "")
+            tobt = str(cdm.get("tobt") or mine.get("tobt") or cdm.get("reqTobt") or mine.get("reqTobt") or "")
             ctot = str(mine.get("ctot") or cdm.get("ctot") or "")
             tsat_ms = _hhmm_to_ms(tsat, now)
+            suggested = False
+            if not tsat_ms and _hhmm_to_ms(tobt, now):
+                # no CDM controller online: no TSAT, only the TOBT you submitted. The start-up window is then the
+                # suggested one around your TOBT (what the VDGS page shows without ATC)
+                tsat, tsat_ms, suggested = tobt, _hhmm_to_ms(tobt, now), True
             if mine.get("atot"):
                 return self._tsat_clear()      # already took off
             if tsat_ms:
                 info = {
                     "callsign": cs, "airport": dep,
-                    "tobt": str(cdm.get("tobt") or mine.get("tobt") or ""), "tsat": tsat,
+                    "tobt": tobt, "tsat": tsat, "suggested": suggested,
                     "ttot": str(cdm.get("ttot") or ""), "ctot": ctot,
                     "status": str(mine.get("cdmSts") or ""),
                     "tsat_ms": tsat_ms, "fetched": int(now * 1000),
                 }
                 if ctot:
                     self._tsat_next = now + WITH_CTOT
+                elif suggested:
+                    pass                       # keep checking every 3 min: a controller may come online with a TSAT
                 else:
                     self._tsat_done = True     # one TSAT is enough without a CTOT
         with self.lock:

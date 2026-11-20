@@ -333,6 +333,12 @@ ingame-ui#ClearwayPanel .ingameUiWrapper { width: 100%; height: 100%; padding: 0
 .cw-mini.on { background-color: var(--mint-soft); color: var(--mint); }
 .cw-mini.danger { background-color: var(--rose-soft); color: var(--rose); }
 .cw-mini.disabled { opacity: 0.4; }
+/* vPilot start button, right of Connect / Disconnect: red = vPilot closed (click to start it), green = open */
+.cw-vp-run { padding-left: 0.45em; padding-right: 0.45em; background-color: var(--rose-soft); color: var(--rose); }
+.cw-vp-run svg { width: 0.95em; height: 0.95em; vertical-align: -0.12em; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+.cw-vp-run.open { background-color: var(--mint-soft); color: var(--mint); }
+.cw-vp-run.starting { background-color: var(--surface-2); color: var(--muted); }
+.cw-vp-run.hidden { display: none; }
 .cw-vp-connect { padding: 0.6em 0.8em 0.2em; background-color: var(--surface); border-bottom: 1px solid var(--line); }
 .cw-field.third { width: 32%; }
 .cw-btn.full { display: block; text-align: center; margin: 0 0 0.5em; }
@@ -640,6 +646,13 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 /* on the Radar tab the card is twice as wide; the map is about as tall as the notepad */
 #cw-card.radar { width: 53.2em; }
 #cw-radar-dock { position: relative; height: 24.6em; overflow: hidden; }
+/* vPilot and CPDLC: the same height as the radar, whatever the number of messages. The message list takes
+   what's left (and scrolls); the connect form, Hoppie row and Request form take their room from it, and only
+   a form that doesn't fit then (Clearance, Oceanic) makes the card taller, never the messages */
+#cw-pane-vpilot, #cw-pane-cpdlc { display: flex; flex-direction: column; min-height: 24.6em; }
+#cw-pane-vpilot > *, #cw-pane-cpdlc > * { flex-shrink: 0; }
+#cw-pane-vpilot > .cw-list, #cw-pane-cpdlc > .cw-list { flex: 1 1 0; min-height: 3em; max-height: none; }
+#cw-pane-vpilot > .cw-com-pop { position: absolute; }
 #cw-radar-away { padding: 0.8em; }
 /* the radar's text scales with Clearway's own scale (radar.js sets its size in px) */
 

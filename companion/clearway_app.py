@@ -17,23 +17,31 @@ import webbrowser
 from clearway import __version__
 from clearway.config import Config, data_dir
 from clearway.server import lan_ip, make_server, pc_name_url, web_root
-from clearway.procs import claim_single_instance, process_running
+from clearway.procs import claim_single_instance, process_path
 from clearway.session import Session
 
 VPILOT_EXE = os.environ.get("CLEARWAY_VPILOT_EXE", "vPilot.exe")
 
 
-def watch_vpilot(cfg: Config, on_quit) -> None:
+def watch_vpilot(cfg: Config, session: Session, on_quit) -> None:
     """Quit Clearway when vPilot closes (setting "quit_with_vpilot"), but only once vPilot has been seen running
-    in this session: Clearway on its own (CPDLC only) keeps running. Checked every 5 s, closed for 10 s."""
+    in this session: Clearway on its own (CPDLC only) keeps running. Checked every 5 s, closed for 10 s.
+    Also tells the panel whether vPilot is open (its start button) and remembers where vPilot is installed."""
     log = logging.getLogger("clearway")
     seen, missing = False, 0
+    wake = session.vpilot_proc_wake
     while True:
-        threading.Event().wait(5)
-        running = process_running(VPILOT_EXE)
-        if running is None:
+        wake.wait(5)
+        wake.clear()
+        path = process_path(VPILOT_EXE)
+        if os.name != "nt":
             return                                  # can't check processes here
+        running = path is not None
+        session.set_vpilot_running(running)
         if running:
+            if path and path != cfg.get("vpilot_path"):
+                cfg.values["vpilot_path"] = path    # so the panel can start vPilot next time
+                cfg.save()
             seen, missing = True, 0
             continue
         missing += 1
@@ -103,7 +111,7 @@ def main() -> None:
     use_tray = os.name == "nt" and "--console" not in sys.argv
     if not use_tray:
         print(f"\n  Clearway {__version__} - open {local_url}\n  Keep this window open while you fly. Ctrl+C to quit.\n")
-        threading.Thread(target=watch_vpilot, args=(cfg, server.shutdown), daemon=True, name="vpilot-watch").start()
+        threading.Thread(target=watch_vpilot, args=(cfg, session, server.shutdown), daemon=True, name="vpilot-watch").start()
         try:
             server.serve_forever()
         except KeyboardInterrupt:
@@ -122,9 +130,9 @@ def main() -> None:
         if session.status == "online":
             unit = session.current_unit or "no ATC"
             unread = sum(1 for m in session.messages if m["dir"] == "in" and not m["acked"])
-            return f"Clearway - {session.callsign} · {unit}" + (f" · {unread} new" if unread else "")
+            return f"Clearway - {session.callsign} Â· {unit}" + (f" Â· {unread} new" if unread else "")
         if session.status == "connecting":
-            return "Clearway - connecting…"
+            return "Clearway - connectingâ€¦"
         return "Clearway - not connected"
 
     def toggle_connection() -> None:
@@ -149,7 +157,7 @@ def main() -> None:
 
     icon = str(web_root() / "clearway.ico")
     tray = TrayIcon(icon, tooltip, menu, open_page)
-    threading.Thread(target=watch_vpilot, args=(cfg, quit_app), daemon=True, name="vpilot-watch").start()
+    threading.Thread(target=watch_vpilot, args=(cfg, session, quit_app), daemon=True, name="vpilot-watch").start()
     try:
         tray.run(balloon=None if first_run else "Clearway is running. Double-click this icon to open it.")
     except Exception:

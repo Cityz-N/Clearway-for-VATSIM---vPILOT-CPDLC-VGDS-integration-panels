@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- MSFS panel: a small power button right of Connect / Disconnect in the vPilot tab. Red while vPilot is closed: click it to start vPilot minimized in the background, without leaving the sim. Green once vPilot is open. Clearway finds vPilot where it's installed (or where it last saw it running)
+- MSFS panel: the vPilot and CPDLC tabs keep the radar's height however many messages arrive (the messages scroll); before, the card grew taller with every message. Only the longer Request forms (Clearance, Oceanic) make it a little taller while they're open
+- MSFS panel: the COM radios popup over the FREQ chip is no longer cut off at the card's right edge
+- TSAT clock: also works when no CDM controller is online. There's no TSAT then, only the TOBT you submitted, so the clock counts down to the suggested start-up window around your TOBT (hover it for details) and keeps checking every 3 minutes in case a controller comes online with a real TSAT
+- TSAT clock: the window now matches the VDGS page, TSAT -5 to TSAT +6 (e.g. 2355-0006z for 0000z): green up to +5:59, then red
+- Radar: aircraft above 18000 ft that are level show a round flight level (FL360 instead of FL358): VATSIM reports true altitude, which drifts with temperature. Climbing or descending aircraft keep the exact value; the exact altitude stays in the aircraft's details
+
 ## 1.1.0
 
 - New **TSAT clock** in the MSFS panel. After you submit your TOBT on the VDGS website (vats.im/vdgs), Clearway reads your start-up time from the vIFF / CDM network and the clock becomes a countdown: yellow while it counts down to the opening of the start-up window, then green from -5:00 to 0:00 (your TSAT) and up to +5:00, then red. Hover it for TSAT, window, TOBT, TTOT and CTOT. Click it to switch to the other clocks as before; it switches to the TSAT clock by itself when a new TSAT arrives and goes back to your usual clock after take-off or when you disconnect

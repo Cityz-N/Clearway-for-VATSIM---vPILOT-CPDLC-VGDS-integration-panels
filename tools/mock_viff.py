@@ -1,6 +1,6 @@
 """Fake vIFF CDM server for testing Clearway's TSAT clock (tools/dev_run.py).
 
-    python tools/mock_viff.py CALLSIGN [TSAT offset minutes, default 8] [--ctot]
+    python tools/mock_viff.py CALLSIGN [TSAT offset minutes, default 8] [--ctot] [--suggested]
 
 Serves GET /ifps/depAirport?airport=XXXX on port 8792 with one flight: CALLSIGN with a TSAT that many
 minutes from the moment the server starts (and a CTOT 20 minutes after it with --ctot). Every request is
@@ -16,6 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 CS = sys.argv[1].upper() if len(sys.argv) > 1 else "TEST123"
 OFFSET = float(sys.argv[2]) if len(sys.argv) > 2 and not sys.argv[2].startswith("--") else 8
 CTOT = "--ctot" in sys.argv
+SUGGESTED = "--suggested" in sys.argv     # TOBT only, no TSAT (no CDM controller online)
 T0 = time.time()
 
 
@@ -29,6 +30,10 @@ class H(BaseHTTPRequestHandler):
         flight = {"callsign": CS, "departure": "XXXX", "atot": "", "ctot": hhmm(tsat + 1200) if CTOT else "",
                   "cdmSts": "COMPLY", "cdmData": {"tobt": hhmm(tsat - 300), "tsat": hhmm(tsat), "ttot": hhmm(tsat + 900),
                                                   "ctot": hhmm(tsat + 1200) if CTOT else ""}}
+        if SUGGESTED:      # no CDM controller online: only the pilot's TOBT, no TSAT (like a real record)
+            flight = {"callsign": CS, "departure": "XXXX", "atot": "", "ctot": "", "cdmSts": "", "tobt": hhmm(tsat),
+                      "reqTobt": hhmm(tsat), "cdmData": {"tobt": "", "tsat": "", "ttot": "", "ctot": "",
+                                                         "reqTobt": hhmm(tsat), "reqTobtType": "PILOT", "confirmed": True}}
         other = {"callsign": "OTHER1", "cid": "999", "cdmData": {"tsat": "0000"}}
         body = json.dumps([other, flight]).encode()
         print(time.strftime("%H:%M:%S"), self.path, "UA:", self.headers.get("User-Agent"), flush=True)

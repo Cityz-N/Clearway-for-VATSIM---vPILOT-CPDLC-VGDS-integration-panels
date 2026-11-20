@@ -349,6 +349,10 @@
     conn.textContent = vp.connected ? "Disconnect" : "Connect";
     conn.classList.toggle("danger", !!vp.connected);
     conn.classList.toggle("disabled", !vp.active);
+    // vPilot start button: red while vPilot is closed (click starts it in the background), green once it's open
+    var run = el("cw-vp-run"), open = vp.running === true;
+    run.className = "cw-mini cw-vp-run" + (!reachable || vp.running == null ? " hidden" : open ? " open" : vp.starting ? " starting" : "");
+    run.title = open ? "vPilot is open" : vp.starting ? "vPilot is starting..." : "vPilot is closed: click to start it in the background";
     // Mode C / standby / ident asked from anywhere (phone, dot command, these buttons): set the aircraft's
     // transponder in the sim too, since vPilot follows it. The first state seen is only remembered.
     if (typeof vp.modec_n === "number") {
@@ -1316,7 +1320,7 @@
 
   // ------------------------------------------------------------ clock: UTC / sim time / local
   // 4th mode, only while Clearway has your TSAT (vIFF / VDGS): a countdown to the TSAT.
-  // Yellow before the start-up window (TSAT -5 min), green inside it (to 0:00, then up to +5:00), red after.
+  // Yellow before the start-up window (TSAT -5 min), green inside it (to 0:00, then up to +5:59: the VDGS window ends at TSAT +6), red after.
   var CLOCK_MODES = ["utc", "sim", "local", "tsat"];
   var clockMode = "utc";
   var lastTsatKey = "";
@@ -1326,7 +1330,7 @@
     var t = tsatNow();
     if (!t || paused) return false;
     var raw = (Date.now() - t.tsat_ms) / 1000;
-    return raw >= -300 && raw <= 300 && load("CLEARWAY_TSAT_SEEN", "") !== t.callsign + "/" + t.tsat_ms;
+    return raw >= -300 && raw < 360 && load("CLEARWAY_TSAT_SEEN", "") !== t.callsign + "/" + t.tsat_ms;
   }
   function tsatSeen() {
     var t = tsatNow();
@@ -1345,10 +1349,10 @@
     updateClock();
   }
   // yellow: time left until the start-up window opens (TSAT -5 min); green: -5:00 to 0:00 to TSAT, then up to
-  // +5:00; red: past the window (+5:01 and up, still from the TSAT)
+  // +5:59 (the VDGS window ends at TSAT +6); red: past the window (+6:00 and up, still from the TSAT)
   function tsatText(t) {
     var raw = Math.round((Date.now() - t.tsat_ms) / 1000), s = raw;
-    var cls = raw < -300 ? "wait" : raw <= 300 ? "go" : "late";
+    var cls = raw < -300 ? "wait" : raw < 360 ? "go" : "late";   // window as the VDGS shows it: TSAT -5 to TSAT +6 (e.g. 2355-0006 for 0000)
     if (raw < -300) s = raw + 300;             // before the window: count down to its opening
     var a = Math.abs(s);
     var body = a >= 3600 ? Math.floor(a / 3600) + ":" + pad2(Math.floor(a / 60) % 60) + ":" + pad2(a % 60)
@@ -1358,8 +1362,11 @@
   function updateClock() {
     var text, d = new Date(), extra = "", c = el("cw-clock"), t = tsatNow();
     if (clockMode === "tsat" && !t) clockMode = "utc";
-    c.title = t ? "TSAT " + t.tsat + "z (start-up window " + fmtHm(t.tsat_ms - 300000) + "-" + fmtHm(t.tsat_ms + 300000) + "z)" +
-      (t.tobt ? "  TOBT " + t.tobt : "") + (t.ttot ? "  TTOT " + t.ttot : "") + (t.ctot ? "  CTOT " + t.ctot : "") + "  - click for other clocks" : "";
+    var win = fmtHm(t ? t.tsat_ms - 300000 : 0) + "-" + fmtHm(t ? t.tsat_ms + 360000 : 0) + "z";
+    c.title = !t ? "" : t.suggested
+      ? "Suggested start-up window " + win + " from your TOBT " + t.tobt + "z (no CDM controller online, so no TSAT)  - click for other clocks"
+      : "TSAT " + t.tsat + "z (start-up window " + win + ")" +
+        (t.tobt ? "  TOBT " + t.tobt : "") + (t.ttot ? "  TTOT " + t.ttot : "") + (t.ctot ? "  CTOT " + t.ctot : "") + "  - click for other clocks";
     if (clockMode === "tsat") {
       var r = tsatText(t);
       text = r.text; extra = " " + r.cls;
@@ -1775,6 +1782,12 @@
       if (!el("cw-vp-connect").classList.contains("hidden") && sc && sc.simbrief_user && !sc.simbrief) vpSimbriefRefresh();
       placeCard();
     });
+    el("cw-vp-run").addEventListener("click", function () {
+      var vp = (state && state.vpilot) || {};
+      if (vp.running) return hint("vPilot is open.", false, "cw-vp-hint");
+      if (vp.starting) return hint("vPilot is starting...", false, "cw-vp-hint");
+      act("vp/launch", {}, "Starting vPilot in the background...", "cw-vp-hint");
+    });
     el("cw-vp-sb-ref").addEventListener("click", vpSimbriefRefresh);
     el("cw-vp-sb").addEventListener("click", function () {   // click the SimBrief callsign to use it
       var ofp = state && state.selcal && state.selcal.simbrief;
@@ -1922,9 +1935,11 @@
       if (!chip) return;
       updateFreqChip();
       var pop = el("cw-com-pop"), card = el("cw-card");
-      pop.style.left = (chip.offsetLeft) + "px";
-      pop.style.top = (chip.offsetTop + chip.offsetHeight + 4) + "px";
       pop.classList.remove("hidden");
+      // under the chip, kept inside the card (the FREQ chip can sit at the right edge)
+      var maxLeft = pop.parentNode.offsetWidth - pop.offsetWidth - 6;
+      pop.style.left = Math.max(6, Math.min(chip.offsetLeft, maxLeft)) + "px";
+      pop.style.top = (chip.offsetTop + chip.offsetHeight + 4) + "px";
     });
     el("cw-vp-chips").addEventListener("mouseout", function (e) {
       if (!up(e.relatedTarget, '.cw-chip-tab[data-chat="FREQ"]')) el("cw-com-pop").classList.add("hidden");
