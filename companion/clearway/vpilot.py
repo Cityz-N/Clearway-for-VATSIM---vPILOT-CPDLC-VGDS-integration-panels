@@ -424,8 +424,12 @@ class VpilotMixin:
     def vpilot_snapshot(self) -> dict:
         pos = self.position
         ctrls = []
+        feed = getattr(self, "_feed", None)
+        names = feed.get("names", {}) if feed else {}   # from the VATSIM data (vPilot doesn't give names)
         for c in self.vp_controllers:
             item = dict(c)
+            if names.get(c["callsign"]):
+                item["name"] = names[c["callsign"]]
             if pos and c.get("lat") is not None and c.get("lon") is not None:
                 try:
                     item["distance"] = round(distance_nm(pos["lat"], pos["lon"], float(c["lat"]), float(c["lon"])))

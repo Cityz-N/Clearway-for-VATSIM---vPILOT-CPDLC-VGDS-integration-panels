@@ -502,7 +502,8 @@
       if (open) {
         var body = c.info && c.info.length ? esc(c.info.join("\n"))
           : (c.info_pending || !c.info ? "Requesting information..." : "No controller information.");
-        info = "<div class=\"cw-atc-info\">" + body + "</div>";
+        // top right: the controller's name as they show it on VATSIM (full name, first name or CID)
+        info = "<div class=\"cw-atc-info\">" + (c.name ? "<span class=\"cw-atc-who\">" + esc(c.name) + "</span>" : "") + body + "</div>";
       }
       return "<div class=\"cw-atc-item" + (open ? " open" : "") + "\">" +
         "<div class=\"cw-atc-row\" data-atc=\"" + esc(c.callsign) + "\" title=\"Show controller information\">" +

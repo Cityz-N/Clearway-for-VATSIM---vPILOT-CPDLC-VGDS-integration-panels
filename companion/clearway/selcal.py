@@ -225,8 +225,12 @@ class SelcalMixin:
                     code = parse_code(m.group(1)) if m else None
                     if code:
                         used.setdefault(code_key(code), []).append({"callsign": cs, "code": code, "where": where})
+            # controllers (and ATIS stations): the name each one shows on VATSIM (full name, first name or CID),
+            # for the vPilot ATC list
+            names = {str(c.get("callsign", "")).upper(): str(c.get("name") or "").strip()
+                     for c in list(data.get("controllers", [])) + list(data.get("atis", []))}
             self._feed = {"ts": time.time(), "used": used, "pilots": pilots, "prefiles": prefiles, "moving": moving,
-                          "count": len(pilots) + len(prefiles)}
+                          "names": names, "count": len(pilots) + len(prefiles)}
             self._feed_error = ""
         with self.lock:
             self._bump()          # "Free / Used by" lines on every screen follow the new data

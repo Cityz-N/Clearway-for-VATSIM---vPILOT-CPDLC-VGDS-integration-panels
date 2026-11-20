@@ -754,3 +754,5 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 /* "Clearway not running": red dot, and a button to start Clearway through the vPilot plugin */
 .cw-cw-run { padding-left: 0.6em; padding-right: 0.6em; background-color: var(--rose-soft); color: var(--rose); }
 .cw-cw-run.starting { background-color: var(--mint-soft); color: var(--mint); }
+/* ATC list: the controller's name (as they show it on VATSIM) at the top right of their information */
+.cw-atc-who { float: right; margin: 0 0 0.2em 0.8em; font-family: "Selawik", "Roboto", sans-serif; font-weight: bold; color: inherit; }

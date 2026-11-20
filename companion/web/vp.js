@@ -156,7 +156,7 @@
           <span class="muted vp-atc-d">${c.distance !== undefined ? c.distance + " nm" : ""}</span>
           <button class="ghost small" data-chatwith="${esc(c.callsign)}">Chat</button>
         </div>
-        ${open ? `<pre class="vp-atc-info">${body}</pre>` : ""}
+        ${open ? `<pre class="vp-atc-info">${c.name ? `<span class="vp-atc-who">${esc(c.name)}</span>` : ""}${body}</pre>` : ""}
       </div>`;
     }).join("") : `<div class="muted small-text" style="padding:8px 0">${vp.connected ? "No controllers in range." : "Connect vPilot to see nearby controllers."}</div>`;
   }

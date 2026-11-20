@@ -63,6 +63,18 @@ if os.environ.get("CLEARWAY_FAKE_FP") == "1":
                     self.fp_status = status
                     self._bump()
     _selcal.SelcalMixin._fp_loop = _fake_fp_loop
+# Controller names in the ATC list come from the live VATSIM data: CLEARWAY_FAKE_NAMES="ELLX_APP=John Doe;..."
+# replaces them all (screenshots never show a real controller's name)
+if os.environ.get("CLEARWAY_FAKE_NAMES") is not None:
+    _fake = dict(p.split("=", 1) for p in os.environ["CLEARWAY_FAKE_NAMES"].split(";") if "=" in p)
+    _real_feed = _selcal.SelcalMixin._vatsim_feed
+
+    def _feed_fake_names(self, *a, **k):
+        feed = _real_feed(self, *a, **k)
+        if feed is not None:
+            feed["names"] = dict(_fake)
+        return feed
+    _selcal.SelcalMixin._vatsim_feed = _feed_fake_names
 if "--tray" not in sys.argv:
     sys.argv.append("--console")
 clearway_app.main()

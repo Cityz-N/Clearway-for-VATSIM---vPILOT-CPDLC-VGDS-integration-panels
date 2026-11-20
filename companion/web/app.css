@@ -453,6 +453,7 @@ body[data-tab="vpilot"] .vp-composer { display: flex; }
 .vp-atc-arrow { color: var(--muted); flex: 0 0 auto; transition: transform .2s; }
 .vp-atc-item.open .vp-atc-arrow { transform: rotate(90deg); color: var(--text); }
 .vp-atc-info { margin: 0 0 10px 26px; padding: 8px 10px; border-radius: 10px; background: var(--mint-soft); color: var(--mint); font: 12.5px/1.45 var(--mono); white-space: pre-wrap; }
+.vp-atc-who { float: right; margin: 0 0 2px 10px; font-weight: 600; color: inherit; }   /* controller's name on VATSIM */
 
 /* tick: mark an unread message as read */
 .tick {
