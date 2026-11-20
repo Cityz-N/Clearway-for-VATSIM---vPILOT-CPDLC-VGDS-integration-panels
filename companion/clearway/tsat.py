@@ -6,7 +6,8 @@ the public vIFF API so the panel clock can count down to the start-up window. Re
 Kept light on the community server:
 - only while vPilot is connected (not as an observer), your flight is in the VATSIM data with a departure
   airport, and you're on the ground;
-- one request for your departure airport every 3 minutes until a TSAT appears;
+- one request for your departure airport every 3 minutes until a TSAT appears and the flight is activated
+  (off blocks);
 - then nothing more, unless the flight has a CTOT (checked once a minute, CTOTs move);
 - it stops after take-off. Only your own flight is kept; everyone else's data is dropped at once.
 It needs your VATSIM CID (Settings): the User-Agent is just that CID, so the vIFF operators can see who asks.
@@ -127,20 +128,22 @@ class TsatMixin:
                 tsat, tsat_ms, suggested = tobt, _hhmm_to_ms(tobt, now), True
             if mine.get("atot"):
                 return self._tsat_clear()      # already took off
+            # "activated": the network has your flight as started (ATFCM status ATC_ACTIV, set with the off-block
+            # time). Until then the panel icon keeps a faint yellow-green ring after the start-up window opened
+            activated = str(mine.get("atfcmStatus") or "") == "ATC_ACTIV" or bool(mine.get("aobt"))
             if tsat_ms:
                 info = {
                     "callsign": cs, "airport": dep,
                     "tobt": tobt, "tsat": tsat, "suggested": suggested,
                     "ttot": str(cdm.get("ttot") or ""), "ctot": ctot,
-                    "status": str(mine.get("cdmSts") or ""),
+                    "status": str(mine.get("cdmSts") or ""), "activated": activated,
                     "tsat_ms": tsat_ms, "fetched": int(now * 1000),
                 }
                 if ctot:
                     self._tsat_next = now + WITH_CTOT
-                elif suggested:
-                    pass                       # keep checking every 3 min: a controller may come online with a TSAT
-                else:
-                    self._tsat_done = True     # one TSAT is enough without a CTOT
+                elif activated:
+                    self._tsat_done = True     # TSAT known and the flight is active: nothing more to learn
+                # else: keep checking every 3 min, for activation (and a real TSAT when it was only suggested)
         with self.lock:
             self.tsat_error = ""
             if info != self.tsat:

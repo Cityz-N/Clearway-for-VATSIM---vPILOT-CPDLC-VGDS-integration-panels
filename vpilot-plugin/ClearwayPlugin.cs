@@ -95,6 +95,7 @@ namespace Clearway.Vpilot
 
             StartThread(SendEventsLoop, "Clearway events");
             StartThread(PollOutboxLoop, "Clearway outbox");
+            StartThread(LauncherLoop, "Clearway launcher");
             broker.PostDebugMessage("Clearway plugin loaded. Messages are shared with Clearway on " + _api);
         }
 
@@ -261,6 +262,82 @@ namespace Clearway.Vpilot
                     }
                     catch { /* Clearway will mark it failed after a timeout */ }
                 }
+            }
+        }
+
+        // ------------------------------------------------------------------ launcher
+        // While Clearway isn't running, the MSFS panel can ask this plugin to start it:
+        //   GET http://127.0.0.1:<Clearway port - 1>/clearway        -> {"plugin":"clearway","running":...}
+        //   GET http://127.0.0.1:<Clearway port - 1>/clearway/start  -> starts Clearway in the background
+        // Local only (127.0.0.1). Clearway writes where it's installed to %APPDATA%\Clearway\app_path.txt.
+
+        private void LauncherLoop()
+        {
+            int port;
+            if (!int.TryParse(ReadPort(), out port)) return;
+            System.Net.Sockets.TcpListener listener;
+            try
+            {
+                listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, port - 1);
+                listener.Start();
+            }
+            catch (Exception) { return; }   // port taken: no start button, everything else works
+            while (true)
+            {
+                try
+                {
+                    using (var client = listener.AcceptTcpClient())
+                    {
+                        client.ReceiveTimeout = 2000;
+                        client.SendTimeout = 2000;
+                        var stream = client.GetStream();
+                        var buf = new byte[2048];
+                        int n = stream.Read(buf, 0, buf.Length);
+                        var line = Encoding.ASCII.GetString(buf, 0, Math.Max(0, n)).Split('\n')[0];
+                        var path = line.Split(' ').Length > 1 ? line.Split(' ')[1] : "";
+                        string body;
+                        if (path.StartsWith("/clearway/start")) body = StartClearway();
+                        else if (path.StartsWith("/clearway")) body = "{\"plugin\":\"clearway\",\"running\":" + (_companionReachable ? "true" : "false") + "}";
+                        else body = "{}";
+                        var bytes = Encoding.UTF8.GetBytes(body);
+                        var head = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n" +
+                                   "Cache-Control: no-store\r\nConnection: close\r\nContent-Length: " + bytes.Length + "\r\n\r\n";
+                        var h = Encoding.ASCII.GetBytes(head);
+                        stream.Write(h, 0, h.Length);
+                        stream.Write(bytes, 0, bytes.Length);
+                    }
+                }
+                catch (Exception) { Thread.Sleep(200); }
+            }
+        }
+
+        private DateTime _lastStart = DateTime.MinValue;
+
+        private string StartClearway()
+        {
+            try
+            {
+                if (System.Diagnostics.Process.GetProcessesByName("Clearway").Length > 0)
+                    return "{\"ok\":true,\"already\":true}";
+                if ((DateTime.UtcNow - _lastStart).TotalSeconds < 20) return "{\"ok\":true,\"starting\":true}";
+                var file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Clearway", "app_path.txt");
+                var exe = Environment.GetEnvironmentVariable("CLEARWAY_APP_PATH")   // for development/testing
+                          ?? (File.Exists(file) ? File.ReadAllText(file).Trim() : "");
+                if (exe == "" || !File.Exists(exe))
+                    return "{\"ok\":false,\"error\":\"Clearway's location isn't known yet: start Clearway once yourself.\"}";
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe)
+                {
+                    WorkingDirectory = Path.GetDirectoryName(exe),
+                    UseShellExecute = true,
+                    WindowStyle = System.Diagnostics.ProcessWindowStyle.Minimized
+                });
+                _lastStart = DateTime.UtcNow;
+                Post("Starting Clearway (asked from the MSFS panel).");
+                return "{\"ok\":true}";
+            }
+            catch (Exception ex)
+            {
+                return "{\"ok\":false,\"error\":" + _json.Serialize("Couldn't start Clearway: " + ex.Message) + "}";
             }
         }
 

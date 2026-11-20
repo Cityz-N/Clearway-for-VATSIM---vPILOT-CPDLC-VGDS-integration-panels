@@ -71,6 +71,43 @@
     xhr.send(body ? JSON.stringify(body) : null);
   }
 
+  // The vPilot plugin listens on Clearway's port - 1 and can start Clearway when it isn't running
+  var pluginUp = false, cwStarting = 0, pluginCheckedAt = 0;
+  function pluginUrl(path) {
+    var m = /^(https?:\/\/[^\/:]+):(\d+)/.exec(API);
+    return m ? m[1] + ":" + (parseInt(m[2], 10) - 1) + path : null;
+  }
+  function pluginGet(path, done) {
+    var url = pluginUrl(path);
+    if (!url) return done(false, {});
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.timeout = 3000;
+    xhr.onload = function () {
+      var data = {};
+      try { data = JSON.parse(xhr.responseText); } catch (e) { /* ignore */ }
+      done(xhr.status === 200, data);
+    };
+    xhr.onerror = xhr.ontimeout = function () { done(false, {}); };
+    xhr.send(null);
+  }
+  function checkPlugin() {            // only while Clearway is unreachable, every 5 s
+    if (reachable || Date.now() - pluginCheckedAt < 5000) return;
+    pluginCheckedAt = Date.now();
+    pluginGet("/clearway", function (ok, data) {
+      var up = ok && data.plugin === "clearway";
+      if (up !== pluginUp) { pluginUp = up; render(); }
+    });
+  }
+  function startClearway() {
+    if (Date.now() - cwStarting < 30000) return;
+    pluginGet("/clearway/start", function (ok, data) {
+      if (ok && data.ok) { cwStarting = Date.now(); hint("Starting Clearway in the background...", false, "cw-vp-hint"); }
+      else hint(data.error || "The vPilot plugin couldn't start Clearway.", true, "cw-vp-hint");
+      render();
+    });
+  }
+
   function act(path, body, okHint, hintId, after) {
     request("POST", "/api/" + path, body || {}, function (ok, data) {
       if (okHint !== null) hint(ok ? (okHint || "") : (data.error || "Failed"), !ok, hintId);
@@ -95,10 +132,11 @@
   function poll(force) {
     request("GET", "/api/state?panel=1&paused=" + (paused ? 1 : 0) + "&since=" + (force ? 0 : version), null, function (ok, data) {
       if (!ok) {
-        if (reachable) { reachable = false; render(); }
+        if (reachable) { reachable = false; pluginCheckedAt = 0; render(); }
+        checkPlugin();
         return;
       }
-      if (!reachable) { reachable = true; }
+      if (!reachable) { reachable = true; cwStarting = 0; }
       if (data.unchanged) return;
       version = data.version;
       state = data;
@@ -155,7 +193,6 @@
     if (!com) { pop.innerHTML = "<div class=\"cw-com-row\">Radios are read from the sim (MSFS only).</div>"; return; }
     var row = function (n) {
       return "<div class=\"cw-com-row\"><b>COM" + n + "</b><span class=\"cw-freq\">" + (com["com" + n] || "---.---") + "</span>" +
-        "<span class=\"cw-com-stby\">stby " + (com["com" + n + "_stby"] || "---.---") + "</span>" +
         // TX = transmitting on this radio, RX = listening to it (each shown when on, greyed when off)
         "<span class=\"cw-com-tx" + (com["com" + n + "_tx"] ? "" : " off") + "\">TX</span>" +
         "<span class=\"cw-com-tx rx" + (com["com" + n + "_rx"] ? "" : " off") + "\">RX</span></div>";
@@ -252,6 +289,8 @@
     // start-up window open (TSAT -5 to +5 min) and not seen yet: the icon turns electric yellow-green
     tsatAlertOn = tsatAlert();
     if (tsatAlertOn) { bubble.classList.remove("idle"); bubble.classList.add("alert-tsat"); }
+    // after that, until the flight is activated: a ring counting down the rest of the start-up window, then orange
+    updateTsatRing();
     lastVp = vpMine; lastCp = cpCount;
     el("cw-odot").classList.toggle("hidden", paused || !vpOther || vpMine > 0 || cpCount > 0);
     var cs = myCallsign(), bcs = el("cw-bub-cs");
@@ -334,7 +373,13 @@
 
   function renderVpilot() {
     var vp = (state && reachable && state.vpilot) || {};
-    el("cw-vp-dot").className = "cw-dot " + (!vp.active ? "" : vp.connected ? "online" : "connecting");
+    el("cw-vp-dot").className = "cw-dot " + (!reachable ? "error" : !vp.active ? "" : vp.connected ? "online" : "connecting");
+    // Clearway not running: a Start button when the vPilot plugin can start it (green while it starts)
+    var cwRun = el("cw-cw-run");
+    if (reachable) cwStarting = 0;
+    var starting = !reachable && Date.now() - cwStarting < 30000;
+    cwRun.className = "cw-mini wide cw-cw-run" + (reachable || (!pluginUp && !starting) ? " hidden" : starting ? " starting" : "");
+    cwRun.textContent = starting ? "Starting..." : "Start";
     el("cw-vp-cs").textContent = !reachable ? "Clearway not running" : !vp.active ? "vPilot not opened / plugin not found" :
       vp.connected ? vp.callsign + (vp.observer ? " (observer)" : "") : "vPilot offline";
     // flight plan on VATSIM for this callsign: green tick filed, red cross not filed (or only a prefile).
@@ -555,8 +600,8 @@
   function renderCpdlc() {
     renderHoppie();
     var dot = el("cw-dot");
-    dot.className = "cw-dot " + (state && reachable ? (state.status === "online" && state.error ? "connecting" : state.status) : "");
-    el("cw-callsign").textContent = state && state.callsign && reachable ? state.callsign : "CPDLC";
+    dot.className = "cw-dot " + (!reachable ? "error" : state ? (state.status === "online" && state.error ? "connecting" : state.status) : "");
+    el("cw-callsign").textContent = !reachable ? "Clearway not running" : state && state.callsign ? state.callsign : "CPDLC";
     var unit = el("cw-unit");
     if (state && reachable && (state.current_unit || state.pending_logon)) {
       unit.className = "cw-pill" + (state.current_unit ? "" : " pending");
@@ -834,6 +879,8 @@
     el("cw-sc-sbuser").classList.toggle("hidden", !scUserOpen);
     prefillInput("cw-sc-sbuser-in", sc.simbrief_user);
     var ofp = sc.simbrief, box = el("cw-sc-ofp");
+    // no SELCAL in the flight plan: show the one vPilot connected to VATSIM with, if any
+    var vpNow = state.vpilot || {}, vpSel = vpNow.connected && !vpNow.observer && vpNow.last ? fmtSelcal(vpNow.last.selcal || "") : "";
     if (ofp) {
       var route = [ofp.departure && ofp.arrival ? ofp.departure + "-" + ofp.arrival : "", ofp.aircraft].join(" ").trim();
       box.innerHTML = "<div class=\"cw-sc-ofp-top\"><span class=\"cw-sc-ofp-tag\">SIMBRIEF</span>" +
@@ -842,6 +889,8 @@
           ? "<div class=\"cw-sc-ofp-code\"><b>" + esc(ofp.selcal) + "</b><span class=\"cw-sc-used\" id=\"cw-sc-ofp-used\"></span>" +
             (isExtended(ofp.selcal) ? "" : "<span class=\"cw-mini\" data-sc-ofp=\"use\">Use in vPilot</span>") +
             "<span class=\"cw-mini\" data-sc-ofp=\"save\">Save</span></div>"
+          : vpSel.replace("-", "").length === 4
+          ? "<div class=\"cw-sc-ofp-code\"><b>" + esc(vpSel) + "</b><span class=\"cw-sc-used\">Not in the flight plan: the SELCAL you connected to VATSIM with</span></div>"
           : "<div class=\"cw-sc-ofp-code\"><span class=\"cw-sc-used\">No SELCAL in this flight plan. Generate one below and add it in SimBrief.</span></div>");
       box.classList.remove("hidden");
       if (ofp.selcal) usedText(ofp.used_by, "cw-sc-ofp-used");
@@ -1359,7 +1408,23 @@
       : Math.floor(a / 60) + ":" + pad2(a % 60);
     return { text: (s < 0 ? "-" : "+") + body + " TSAT", cls: cls };
   }
+  // TSAT ring on the icon, once the start-up window alert is cleared and while the flight isn't activated (off
+  // blocks): a yellow-green arc from 12 o'clock that retracts counterclockwise as the window (TSAT -5 to +6 min)
+  // runs out, then a full electric-orange ring once the window has expired
+  var RING_C = 2 * Math.PI * 47.5;
+  function updateTsatRing() {
+    var b = el("cw-bubble"), arc = el("cw-tring-arc"), t = tsatNow(), now = Date.now();
+    var on = !tsatAlertOn && t && !t.activated && now >= t.tsat_ms - 300000;
+    var late = on && now >= t.tsat_ms + 360000;
+    b.classList.toggle("tsat-ring", !!on && !late);
+    b.classList.toggle("tsat-late", !!late);
+    if (!on) return;
+    var left = late ? 1 : Math.max(0, Math.min(1, (t.tsat_ms + 360000 - now) / 660000));
+    arc.setAttribute("stroke-dasharray", (RING_C * left).toFixed(2) + " " + RING_C.toFixed(2));
+  }
+
   function updateClock() {
+    updateTsatRing();
     var text, d = new Date(), extra = "", c = el("cw-clock"), t = tsatNow();
     if (clockMode === "tsat" && !t) clockMode = "utc";
     var win = fmtHm(t ? t.tsat_ms - 300000 : 0) + "-" + fmtHm(t ? t.tsat_ms + 360000 : 0) + "z";
@@ -1782,6 +1847,7 @@
       if (!el("cw-vp-connect").classList.contains("hidden") && sc && sc.simbrief_user && !sc.simbrief) vpSimbriefRefresh();
       placeCard();
     });
+    el("cw-cw-run").addEventListener("click", startClearway);
     el("cw-vp-run").addEventListener("click", function () {
       var vp = (state && state.vpilot) || {};
       if (vp.running) return hint("vPilot is open.", false, "cw-vp-hint");

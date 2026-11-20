@@ -31,6 +31,8 @@
           <span class="cw-ndot vp hidden" id="cw-ndot-vp"></span>
           <span class="cw-ndot cp hidden" id="cw-ndot-cp"></span>
           <span class="cw-pause-mark"></span>
+          <!-- TSAT ring: counts down the start-up window (see updateTsatRing) -->
+          <svg class="cw-tring" viewBox="0 0 100 100"><circle class="cw-tring-track" cx="50" cy="50" r="47.5"/><circle id="cw-tring-arc" class="cw-tring-arc" cx="50" cy="50" r="47.5" transform="rotate(-90 50 50)"/></svg>
           <span class="cw-odot hidden" id="cw-odot"></span>
           <span class="cw-bub-cs hidden" id="cw-bub-cs"></span>
         </div>
@@ -81,6 +83,7 @@
             <div class="cw-bar">
               <span class="cw-dot" id="cw-vp-dot"></span>
               <span class="cw-bar-title" id="cw-vp-cs">vPilot</span>
+              <div class="cw-mini wide cw-cw-run hidden" id="cw-cw-run" title="Start Clearway in the background (through the vPilot plugin)">Start</div>
               <span class="cw-fp-warn hidden" id="cw-fp-warn" title="No flight plan filed on VATSIM for this callsign">FP status</span>
               <div class="cw-mini" id="cw-vp-sby" title="Transponder standby">SBY</div>
               <div class="cw-mini" id="cw-vp-c" title="Transponder Mode C">C</div>

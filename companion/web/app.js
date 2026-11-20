@@ -83,9 +83,18 @@
     }
   }
 
+  // When Clearway closes, Windows' firewall usually drops the phone's requests silently instead of refusing them,
+  // so a request would hang for a minute or more: give up after 5 s and show "not running"
+  let polling = false, pollStarted = 0;
   async function poll(force) {
+    if (polling && Date.now() - pollStarted < 6000) return;      // one request at a time
+    polling = true;
+    pollStarted = Date.now();
+    const ctl = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), 5000) : null;
     try {
-      const res = await fetch(`/api/state?since=${force ? 0 : version}`, { headers: { "X-Clearway-Key": key }, cache: "no-store" });
+      const res = await fetch(`/api/state?since=${force ? 0 : version}`,
+        { headers: { "X-Clearway-Key": key }, cache: "no-store", signal: ctl ? ctl.signal : undefined });
       if (res.status === 401) { $("pairBanner").hidden = false; return; }
       $("pairBanner").hidden = true;
       const data = await res.json();
@@ -96,7 +105,11 @@
       tryNameAddress(data.name_url);
     } catch (e) {
       setDot("error");
-      $("sub").textContent = "Companion not reachable";
+      $("sub").textContent = "Clearway not running on the PC";
+      version = 0;                        // full state again when it's back
+    } finally {
+      clearTimeout(timer);
+      polling = false;
     }
   }
 

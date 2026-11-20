@@ -3,8 +3,12 @@
 ## 1.2.0
 
 - MSFS panel: a small power button right of Connect / Disconnect in the vPilot tab. Red while vPilot is closed: click it to start vPilot minimized in the background, without leaving the sim. Green once vPilot is open. Clearway finds vPilot where it's installed (or where it last saw it running)
-- MSFS panel: the vPilot and CPDLC tabs keep the radar's height however many messages arrive (the messages scroll); before, the card grew taller with every message. Only the longer Request forms (Clearance, Oceanic) make it a little taller while they're open
-- MSFS panel: the COM radios popup over the FREQ chip is no longer cut off at the card's right edge
+- MSFS panel: the vPilot and CPDLC tabs grow with their messages only up to the radar's height, then the messages scroll; before, the card grew taller with every message
+- MSFS panel: the COM radios popup over the FREQ chip is no longer cut off at the card's right edge, and shows only the active frequencies (no standby)
+- MSFS panel: when Clearway isn't running, the faint icon is red (it was yellow, like "not on VATSIM"), and the vPilot and CPDLC tabs say "Clearway not running" with a red dot. With vPilot open, a **Start** button next to it starts Clearway in the background through the vPilot plugin; it turns green while Clearway starts and goes away once it's running. Needs the new vPilot plugin (copy the new Clearway.vPilot.dll into vPilot's Plugins folder) and Clearway started once by hand, so the plugin knows where it is
+- MSFS panel: after the start-up window alert, a yellow-green ring around the icon counts down the rest of the window: it retracts counterclockwise and is gone when the window closes (TSAT +6), then the ring turns electric orange. It stays until your flight is activated on the network (off blocks). Clearway keeps checking the CDM data every 3 minutes until then
+- SELCAL tab: when your SimBrief flight plan has no SELCAL, it shows the SELCAL you connected to VATSIM with (if any)
+- Phone: notices within 5 seconds when Clearway closes ("Clearway not running on the PC"); before, it could keep showing the old state for minutes, because Windows' firewall drops the requests silently instead of refusing them
 - TSAT clock: also works when no CDM controller is online. There's no TSAT then, only the TOBT you submitted, so the clock counts down to the suggested start-up window around your TOBT (hover it for details) and keeps checking every 3 minutes in case a controller comes online with a real TSAT
 - TSAT clock: the window now matches the VDGS page, TSAT -5 to TSAT +6 (e.g. 2355-0006z for 0000z): green up to +5:59, then red
 - Radar: aircraft above 18000 ft that are level show a round flight level (FL360 instead of FL358): VATSIM reports true altitude, which drifts with temperature. Climbing or descending aircraft keep the exact value; the exact altitude stays in the aircraft's details

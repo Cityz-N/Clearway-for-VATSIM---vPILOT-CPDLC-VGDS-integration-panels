@@ -90,6 +90,11 @@ def main() -> None:
         log.info("Clearway is already running: this second copy closes")
         notify_user("Clearway is already running. Look for its icon next to the clock.")
         return
+    if getattr(sys, "frozen", False):              # where Clearway.exe is, so the vPilot plugin can start it
+        try:
+            (data_dir() / "app_path.txt").write_text(sys.executable, encoding="utf-8")
+        except OSError:
+            pass
     session = Session(cfg)
     try:
         server = make_server(session, port)

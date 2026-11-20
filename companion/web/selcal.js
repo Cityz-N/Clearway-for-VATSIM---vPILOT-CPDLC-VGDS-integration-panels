@@ -54,12 +54,19 @@
     $("scSbWho").textContent = sc.simbrief_user ? "******" : "";      // kept private on screen
     if (document.activeElement !== $("scSbUserIn") && !$("scSbUserIn").value) $("scSbUserIn").value = sc.simbrief_user || "";
     const ofp = sc.simbrief;
+    // no SELCAL in the flight plan: show the one vPilot connected to VATSIM with, if any
+    const vpNow = s.vpilot || {};
+    const vpTones = vpNow.connected && !vpNow.observer && vpNow.last ? String(vpNow.last.selcal || "").toUpperCase().replace(/[^A-Z0-9]/g, "") : "";
+    const vpSel = vpTones.length === 4 ? vpTones.slice(0, 2) + "-" + vpTones.slice(2) : "";
     if (ofp) {
       const route = [ofp.departure && ofp.arrival ? `${ofp.departure}→${ofp.arrival}` : "", ofp.aircraft, ofp.reg].filter(Boolean).join(" · ");
       $("scOfp").innerHTML = `<div class="sc-ofp"><div class="sc-ofp-top"><b class="mono">${esc(ofp.callsign || "–")}</b><span class="muted small-text">${esc(route)}</span></div>` +
         (ofp.selcal
           ? `<div class="sc-ofp-code"><span class="sc-code small" data-copy="${esc(ofp.selcal)}">${codeHtml(ofp.selcal)}</span>${usedHtml(ofp.used_by)}</div>
              <div class="row">${isExtended(ofp.selcal) ? "" : '<button class="ghost" data-ofp="use">Use in vPilot</button>'}<button class="ghost" data-ofp="save">Save</button></div>`
+          : vpSel
+          ? `<div class="sc-ofp-code"><span class="sc-code small" data-copy="${esc(vpSel)}">${codeHtml(vpSel)}</span></div>
+             <p class="muted small-text">Not in the flight plan: the SELCAL you connected to VATSIM with.</p>`
           : '<p class="muted small-text">No SELCAL in this flight plan. Generate one below and add it in SimBrief.</p>') + "</div>";
     } else {
       $("scOfp").innerHTML = sc.simbrief_error ? `<p class="sc-err small-text">${esc(sc.simbrief_error)}</p>` : "";
