@@ -138,6 +138,7 @@ def ring_centroid(pts):
 class Static:
     def __init__(self):
         self.airports = {}      # ICAO -> (lat, lon, name)
+        self.alias = {}         # IATA / FAA code used in US callsigns -> ICAO (LAX -> KLAX)
         self.airspaces = []     # dicts: set, id, group colour, owners [(set,pos)], polys [[(lat,lon)...]]
         self.positions = {}     # (set,pos) -> dict
         self.pos_index = {}     # (first segment of prefix, type) -> [(set,pos)]
@@ -167,6 +168,7 @@ class Static:
                     if len(p) > 4 and p[4] and p[4] not in self.airports:   # IATA/LID alias (e.g. US "LAX")
                         try:
                             self.airports[p[4]] = (float(p[2]), float(p[3]), p[1])
+                            self.alias[p[4]] = p[0]                       # LAX -> KLAX (controllers' callsigns)
                         except ValueError:
                             pass
         log("VATSpy airports:", len(self.airports))
@@ -409,9 +411,13 @@ class State:
                     online[matched] = info
             prefix = cs.split("_")[0]
             if typ in ("DEL", "GND", "TWR", "ATIS", "APP", "DEP", "RMP"):
-                coord = st.airport_coord(prefix) or (st.airport_coord("K" + prefix) if len(prefix) == 3 else None)
+                # one airport per ICAO: US controllers log in as LAX_TWR while the ATIS is KLAX_ATIS
+                icao = st.alias.get(prefix) or prefix
+                if not st.airport_coord(icao) and len(prefix) == 3 and st.airport_coord("K" + prefix):
+                    icao = "K" + prefix
+                coord = st.airport_coord(icao)
                 if coord:
-                    ap = airports.setdefault(prefix, {"icao": prefix, "lat": coord[0], "lon": coord[1], "c": []})
+                    ap = airports.setdefault(icao, {"icao": icao, "lat": coord[0], "lon": coord[1], "c": []})
                     i = ctl_info(c); i["t"] = typ
                     ap["c"].append(i)
                     if typ in ("APP", "DEP") and not matched:
