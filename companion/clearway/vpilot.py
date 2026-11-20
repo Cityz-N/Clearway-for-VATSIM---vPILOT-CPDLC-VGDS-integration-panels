@@ -195,8 +195,10 @@ class VpilotMixin:
             me = self.vpilot_callsign or self.callsign
             mentioned = bool(me) and me in text.upper()
             alert = mentioned or bool(self.cfg.get("vpilot_all_frequency"))
+            # frequency text for others isn't "unread" (no counters, no notification), but it's new until you look at
+            # the frequency chat: the panel icon shows a small grey dot for it ("quiet")
             msg = self._add("in", "radio", sender, text, chat=FREQ, freq=str(evt.get("frequencies", "")),
-                            mention=mentioned, acked=not alert)
+                            mention=mentioned, acked=not alert, quiet=not alert)
             if alert:
                 self._notify(msg)
         elif kind == "atis":

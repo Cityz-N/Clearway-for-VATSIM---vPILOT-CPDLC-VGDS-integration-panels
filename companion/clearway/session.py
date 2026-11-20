@@ -244,6 +244,9 @@ class Session(VpilotMixin, SelcalMixin, TsatMixin):
             if not station or time.time() - self.pending_since < self.LOGON_TIMEOUT:
                 return
             self.pending_logon = None
+            for m in self.messages:            # the request card stops waiting for an answer
+                if m["dir"] == "out" and m["text"] == "REQUEST LOGON" and m["station"] == station and m["status"] == "awaiting":
+                    m["status"] = "none"
             self._bump()
         self._system(f"No answer from {station} after 10 minutes: logon request cancelled. Log on again when the station is online.")
 
@@ -332,12 +335,12 @@ class Session(VpilotMixin, SelcalMixin, TsatMixin):
             self._expect_reply()
             return
         if upper.startswith("LOGON ACCEPTED"):
+            # logged on: shown as a normal message from the station (icon, notification, answers the LOGON request),
+            # not just a grey system line that was easy to miss
             with self.lock:
                 self.current_unit = self.pending_logon or item.sender
                 self.pending_logon = None
                 self._bump()
-            self._system(f"Logged on to {self.current_unit}.")
-            return
         if upper.startswith("LOGON REJECTED") or upper.startswith("LOGON DENIED"):
             with self.lock:
                 self.pending_logon = None
@@ -518,6 +521,7 @@ class Session(VpilotMixin, SelcalMixin, TsatMixin):
                     hit = True
                 if hit:
                     m["acked"] = True
+                    m.pop("quiet", None)
             self._bump()
 
     def unack(self, msg_id: int) -> None:
@@ -579,8 +583,9 @@ class Session(VpilotMixin, SelcalMixin, TsatMixin):
             self.pending_since = time.time()
             self._bump()
         self._expect_reply()
-        self._send_logged(station, "cpdlc", build_cpdlc(self._take_min(), None, "Y", "REQUEST LOGON"),
-                          "cpdlc", "REQUEST LOGON")
+        n = self._take_min()   # kept on the request, so the station's LOGON ACCEPTED is linked to it as its answer
+        self._send_logged(station, "cpdlc", build_cpdlc(n, None, "Y", "REQUEST LOGON"),
+                          "cpdlc", "REQUEST LOGON", min=n, ra="Y", status="awaiting")
 
     def logoff(self) -> None:
         self._require_online()
@@ -680,6 +685,7 @@ class Session(VpilotMixin, SelcalMixin, TsatMixin):
             unacked_vp = sum(1 for m in self.messages if m["dir"] == "in" and not m["acked"] and m["kind"] in VP_KINDS)
             unacked_cpdlc = sum(1 for m in self.messages if m["dir"] == "in" and not m["acked"] and m["kind"] not in VP_KINDS)
             unacked = unacked_vp + unacked_cpdlc
+            quiet_vp = sum(1 for m in self.messages if m.get("quiet"))   # new frequency text for others
             return {
                 "version": self.version,
                 "status": self.status,
@@ -696,6 +702,7 @@ class Session(VpilotMixin, SelcalMixin, TsatMixin):
                 "unacked": unacked,
                 "unacked_vpilot": unacked_vp,
                 "unacked_cpdlc": unacked_cpdlc,
+                "quiet_vpilot": quiet_vp,
                 "notes": self.notes,
                 "messages": msgs,
                 "trash": [{k: m.get(k) for k in ("id", "ts", "dir", "kind", "station", "text")}

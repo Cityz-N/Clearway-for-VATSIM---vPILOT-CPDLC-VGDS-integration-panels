@@ -263,13 +263,13 @@
     var status = !reachable ? "offline" : (state ? state.status : "offline");
     var vpOnline = reachable && state && state.vpilot && state.vpilot.connected;
     // vPilot messages meant for me (private chats, SELCAL, frequency text with my callsign) colour the icon;
-    // the rest (broadcasts, all-frequency alerts) only show a faint dot at its bottom right
+    // the rest (new frequency text for others, broadcasts) only show a small grey dot at its bottom left
     var vpMine = 0;
     if (vpCount && state) for (var i = 0; i < state.messages.length; i++) {
       var m = state.messages[i];
       if (m.dir === "in" && !m.acked && (m.kind === "pm" || m.kind === "selcal" || (m.kind === "radio" && m.mention))) vpMine++;
     }
-    var vpOther = vpCount - vpMine;
+    var vpOther = vpCount - vpMine + (reachable && state ? (state.quiet_vpilot || 0) : 0);
 
     bubble.className = "";
     if (status === "online" || vpOnline) bubble.classList.add("online");
@@ -281,17 +281,21 @@
       if (!expanded) bubble.classList.add("idle");
     } else {
       // first seconds after the panel opens: fully visible so it's easy to find, then the usual faint icon
-      if (!vpMine && !cpCount && !expanded && Date.now() >= introUntil) bubble.classList.add("idle");   // nearly invisible until needed
-      // a new message simply turns the icon solid (no flashing): amber for CPDLC, cyan for vPilot messages to me
-      if (cpCount > 0) bubble.classList.add("alert");
-      else if (vpMine > 0) bubble.classList.add("alert-vp");
+      var anyUnread = vpMine > 0 || cpCount > 0 || vpOther > 0;
+      if (!anyUnread && !expanded && Date.now() >= introUntil) bubble.classList.add("idle");   // nearly invisible until needed
+      // a new message colours the quarter under its pill (no flashing): cyan top left for vPilot messages to me,
+      // amber top right for CPDLC. With the card closed the rest of the icon fades away until hovered.
+      // vPilot messages that aren't for me: no colour, only the grey dot (faint by colours, not opacity, so the dot shows)
+      if (vpMine > 0) bubble.classList.add("q-vp");
+      if (cpCount > 0) bubble.classList.add("q-cp");
+      if (anyUnread && !expanded && Date.now() >= introUntil) bubble.classList.add("q-faint");
     }
     // start-up window open (TSAT -5 to +5 min) and not seen yet: the icon turns electric yellow-green
     tsatAlertOn = tsatAlert();
-    if (tsatAlertOn) { bubble.classList.remove("idle"); bubble.classList.add("alert-tsat"); }
+    if (tsatAlertOn) { bubble.classList.remove("idle"); bubble.classList.remove("q-faint"); bubble.classList.add("alert-tsat"); }
     // after that, until the flight is activated: a ring counting down the rest of the start-up window, then orange
     updateTsatRing();
-    lastVp = vpMine; lastCp = cpCount;
+    lastVp = vpMine + vpOther; lastCp = cpCount;
     el("cw-odot").classList.toggle("hidden", paused || !vpOther || vpMine > 0 || cpCount > 0);
     var cs = myCallsign(), bcs = el("cw-bub-cs");
     if (bcs.textContent !== cs) bcs.textContent = cs;
@@ -453,7 +457,9 @@
     // reading the chat on screen marks it read
     if (expanded && tab === "vpilot" && !notesOpen && !atcOpen) {
       for (var k = 0; k < chats.length; k++) {
-        if (chats[k].name === activeChat && chats[k].unread && !ackPending[activeChat]) {
+        // (new frequency text for others counts too: it clears the icon's grey dot)
+        var fresh = chats[k].unread || (activeChat === "FREQ" && state && state.quiet_vpilot);
+        if (chats[k].name === activeChat && fresh && !ackPending[activeChat]) {
           ackPending[activeChat] = true;
           (function (chat) { act("ack", { chat: chat }, null, null, function () { delete ackPending[chat]; }); })(activeChat);
         }
@@ -1463,6 +1469,7 @@
     save("CLEARWAY_EXPANDED", expanded);
     if (expanded) tsatSeen();                  // opening the card counts as seeing the start-up window alert
     el("cw-bubble").classList.toggle("idle", !expanded && !(lastVp || lastCp) && !tsatAlertOn);
+    el("cw-bubble").classList.toggle("q-faint", !expanded && !paused && !!(lastVp || lastCp) && !tsatAlertOn);
     if (expanded) { lastChatKey = ""; placeCard(); poll(true); }
   }
 
@@ -1782,6 +1789,11 @@
     // peek() ignores a second call within 350 ms, so a sim that sends both still peeks once.
     el("cw-bubble").addEventListener("mouseup", function (e) { if (e.button === 2) { e.preventDefault(); peek(); } });
     el("cw-peek").addEventListener("click", onPeekClick);
+    // right click on the peek closes it (mousedown, contextmenu, or only the release in MSFS 2024)
+    var closePeekRight = function (e) { if (e.type === "contextmenu" || e.button === 2) { e.preventDefault(); e.stopPropagation(); hidePeek(); } };
+    el("cw-peek").addEventListener("mousedown", closePeekRight);
+    el("cw-peek").addEventListener("mouseup", closePeekRight);
+    el("cw-peek").addEventListener("contextmenu", closePeekRight);
     el("cw-peek").addEventListener("mouseover", function () { peekHover = true; clearTimeout(peekTimer); });
     el("cw-peek").addEventListener("mouseout", function (e) {
       if (e.relatedTarget && el("cw-peek").contains(e.relatedTarget)) return;   // moving between its children

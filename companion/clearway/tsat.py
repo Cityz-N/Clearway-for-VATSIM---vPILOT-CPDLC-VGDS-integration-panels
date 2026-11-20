@@ -32,10 +32,20 @@ AIRBORNE_GS = 50           # kt: above this you've left the ground
 LOOP = 10                  # seconds between looks at the conditions (no request)
 
 
-def _hhmm_to_ms(hhmm: str, now: float) -> int | None:
-    """'1412' (UTC) -> epoch ms of the nearest such time to now (handles midnight)."""
-    s = str(hhmm or "").strip().replace(":", "")
+def _hhmm(value) -> str:
+    """vIFF times come as '1412' or with seconds '141200' (cdmData since 2026-11): -> '1412', or '' if not a time."""
+    s = str(value or "").strip().replace(":", "")
+    if len(s) == 6 and s.isdigit():
+        s = s[:4]
     if len(s) != 4 or not s.isdigit() or int(s[:2]) > 23 or int(s[2:]) > 59:
+        return ""
+    return s
+
+
+def _hhmm_to_ms(hhmm: str, now: float) -> int | None:
+    """'1412' or '141200' (UTC) -> epoch ms of the nearest such time to now (handles midnight)."""
+    s = _hhmm(hhmm)
+    if not s:
         return None
     today = dt.datetime.fromtimestamp(now, dt.timezone.utc).replace(hour=int(s[:2]), minute=int(s[2:]), second=0, microsecond=0)
     best = min((today + dt.timedelta(days=d) for d in (-1, 0, 1)), key=lambda t: abs(t.timestamp() - now))
@@ -117,9 +127,9 @@ class TsatMixin:
         if mine:
             cdm = mine.get("cdmData") or {}
             now = time.time()
-            tsat = str(cdm.get("tsat") or "")
-            tobt = str(cdm.get("tobt") or mine.get("tobt") or cdm.get("reqTobt") or mine.get("reqTobt") or "")
-            ctot = str(mine.get("ctot") or cdm.get("ctot") or "")
+            tsat = _hhmm(cdm.get("tsat"))
+            tobt = _hhmm(cdm.get("tobt") or mine.get("tobt") or cdm.get("reqTobt") or mine.get("reqTobt"))
+            ctot = _hhmm(mine.get("ctot") or cdm.get("ctot"))
             tsat_ms = _hhmm_to_ms(tsat, now)
             suggested = False
             if not tsat_ms and _hhmm_to_ms(tobt, now):
@@ -135,7 +145,7 @@ class TsatMixin:
                 info = {
                     "callsign": cs, "airport": dep,
                     "tobt": tobt, "tsat": tsat, "suggested": suggested,
-                    "ttot": str(cdm.get("ttot") or ""), "ctot": ctot,
+                    "ttot": _hhmm(cdm.get("ttot")), "ctot": ctot,
                     "status": str(mine.get("cdmSts") or ""), "activated": activated,
                     "tsat_ms": tsat_ms, "fetched": int(now * 1000),
                 }

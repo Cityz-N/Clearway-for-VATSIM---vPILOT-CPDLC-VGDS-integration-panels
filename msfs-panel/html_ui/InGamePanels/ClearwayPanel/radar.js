@@ -768,12 +768,12 @@
     c.innerHTML = "<span class='x' id='rd-cardx'><i class='a'></i><i class='b'></i></span>" + h;
     c.className = selected.kind === "airport" ? "ap" : "";
     el("cardx").onclick = function () { selected = null; showCard(); dirty = true; };
-    // controller information is clamped to two lines: a click shows all of it (and stays open across refreshes)
-    var ats = c.getElementsByClassName("atis");
+    // an ATIS is folded to two lines: its link shows all of it (and it stays open across refreshes)
+    var ats = c.getElementsByClassName("atis-more");
     for (var m = 0; m < ats.length; m++) ats[m].onclick = function () {
       var k = this.getAttribute("data-k");
       if (openAtis[k]) delete openAtis[k]; else openAtis[k] = 1;
-      this.className = "atis" + (openAtis[k] ? " open" : "");
+      showCard();
     };
   }
   var openAtis = {};
@@ -789,8 +789,15 @@
     el("tArrN").textContent = t.nArr;
   }
   function ctlHtml(k, voice) {
-    var atis = k.atis && k.atis.length ? "<div class='atis" + (openAtis[k.cs] ? " open" : "") + "' data-k='" + esc(k.cs) +
-      "' title='Click to show all'>" + esc(k.atis.join(" ")) + "</div>" : "";
+    // a controller's information lines are shown in full, one per line (as they set them on VATSIM). An ATIS can be
+    // long: it's folded to two lines, with a link to show all of it
+    var atis = "";
+    if (k.atis && k.atis.length) {
+      var isAtis = /_ATIS$/i.test(k.cs || ""), open = !isAtis || openAtis[k.cs], lines = [];
+      for (var i = 0; i < k.atis.length; i++) lines.push(esc(k.atis[i]));
+      atis = "<div class='atis" + (open ? " open" : "") + "'>" + lines.join("<br>") + "</div>" +
+        (isAtis ? "<div class='atis-more' data-k='" + esc(k.cs) + "'>" + (open ? "Show less" : "Show full ATIS") + "</div>" : "");
+    }
     return "<div class='ctl'><div class='row'><b>" + esc(k.cs) + "</b><span class='freq'>" + esc(k.f) + "</span></div>" +
       (voice ? "<div class='sub'>" + esc(voice) + "</div>" : "") +
       (k.n ? "<div class='sub'>" + esc(k.n) + "</div>" : "") + atis + "</div>";

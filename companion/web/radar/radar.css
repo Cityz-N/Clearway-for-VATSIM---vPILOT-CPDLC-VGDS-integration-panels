@@ -79,9 +79,12 @@
 #rd-card .freq { color: #7fe0a0; font-weight: 600; margin-left: 0.8em; }
 #rd-card .ctl { padding: 0.25em 0; border-top: 1px solid #222b37; }
 #rd-card .ctl:first-of-type { border-top: 0; }
-/* controller information: two lines (max-height, Coherent has no line-clamp); a click shows it all */
-#rd-card .atis { color: #8d9bad; font-size: 0.92em; white-space: normal; max-height: 2.5em; overflow: hidden; cursor: pointer; }
+/* controller information: shown in full, one VATSIM line per line. An ATIS is folded to two lines (max-height,
+   Coherent has no line-clamp) with a "Show full ATIS" link. A tall card scrolls instead of leaving the radar */
+#rd-card { max-height: calc(100% - 3.6em); overflow-y: auto; box-sizing: border-box; }
+#rd-card .atis { color: #8d9bad; font-size: 0.92em; line-height: 1.25em; white-space: normal; max-height: 2.5em; overflow: hidden; }
 #rd-card .atis.open { max-height: none; }
+#rd-card .atis-more { margin-top: 0.15em; font-size: 0.85em; font-weight: bold; color: #7fb4e6; cursor: pointer; }
 #rd-card .x { position: absolute; right: 0.5em; top: 0.35em; width: 1.4em; height: 1.4em; cursor: pointer; }
 #rd-card .x i { position: absolute; left: 50%; top: 50%; width: 0.9em; height: 0.12em; margin: -0.06em 0 0 -0.45em; background: #6c7a8c; }
 #rd-card .x i.a { transform: rotate(45deg); }

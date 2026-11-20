@@ -28,7 +28,8 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         tsat = T0 + OFFSET * 60
         flight = {"callsign": CS, "departure": "XXXX", "atot": "", "ctot": hhmm(tsat + 1200) if CTOT else "",
-                  "cdmSts": "COMPLY", "cdmData": {"tobt": hhmm(tsat - 300), "tsat": hhmm(tsat), "ttot": hhmm(tsat + 900),
+                  "cdmSts": "COMPLY", "cdmData": {"tobt": hhmm(tsat - 300) + "00", "tsat": hhmm(tsat) + "00",
+                                                  "ttot": hhmm(tsat + 900) + "00",   # live cdmData: HHMMSS
                                                   "ctot": hhmm(tsat + 1200) if CTOT else ""}}
         if SUGGESTED:      # no CDM controller online: only the pilot's TOBT, no TSAT (like a real record)
             flight = {"callsign": CS, "departure": "XXXX", "atot": "", "ctot": "", "cdmSts": "", "tobt": hhmm(tsat),

@@ -56,7 +56,9 @@
     renderAtc(vp);
     renderNotes(s);
     // reading the chat that is on screen marks it read
-    if (tab === "vpilot" && !document.hidden && (chats.get(active) || {}).unread) CW.act("ack", { chat: active });
+    // (new frequency text for others counts too, so the panel's grey dot goes away)
+    if (tab === "vpilot" && !document.hidden && ((chats.get(active) || {}).unread || (active === "FREQ" && s.quiet_vpilot)))
+      CW.act("ack", { chat: active });
     lastTab = tab;
   }
 
