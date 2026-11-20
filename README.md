@@ -6,8 +6,12 @@ A small Windows companion app feeds an in-game MSFS toolbar panel (a floating ic
 
 <p align="center"><img src="docs/fs-hero.png" width="820" alt="Clearway in MSFS and on the phone"></p>
 <p align="center"><img src="docs/clearway-demo.webp" width="820" alt="Animation: SELCAL, CPDLC clearance, vPilot chat, CPDLC answer from the peek window, Radar"></p>
-<p align="center"><img src="docs/fs-panels.png" width="820" alt="MSFS panel: CPDLC, vPilot and SELCAL tabs"></p>
-<p align="center"><img src="docs/fs-radar.png" width="820" alt="MSFS panel: Radar tab"></p>
+<p align="center"><img src="docs/howto-vpilot.png" width="410" alt="vPilot windowr"></p>
+<p align="center"><img src="docs/howto-cpdlc.png" width="410" alt="CPDLC window"></p>
+<p align="center"><img src="docs/howto-radar.png" width="410" alt="Radar window"></p>
+<p align="center"><img src="docs/howto-selcal.png" width="410" alt="SELCAL window"></p>
+<p align="center"><img src="docs/howto-icon.png" width="410" alt="The icon"></p>
+<p align="center"><img src="docs/howto-header.png" width="410" alt="Header"></p>
 <p align="center"><img src="docs/fs-phones.png" width="820" alt="Phone: vPilot, CPDLC and SELCAL tabs"></p>
 
 ## Features
