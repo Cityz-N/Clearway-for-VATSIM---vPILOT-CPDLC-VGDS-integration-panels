@@ -6,12 +6,14 @@ A small Windows companion app feeds an in-game MSFS toolbar panel (a floating ic
 
 <p align="center"><img src="docs/fs-hero.png" width="820" alt="Clearway in MSFS and on the phone"></p>
 <p align="center"><img src="docs/clearway-demo.webp" width="820" alt="Animation: SELCAL, CPDLC clearance, vPilot chat, CPDLC answer from the peek window, Radar"></p>
-<p align="center"><img src="docs/howto-vpilot.png" width="820" alt="vPilot windowr"></p>
+<p align="center"><img src="docs/howto-vpilot.png" width="820" alt="vPilot window"></p>
 <p align="center"><img src="docs/howto-cpdlc.png" width="820" alt="CPDLC window"></p>
 <p align="center"><img src="docs/howto-radar.png" width="820" alt="Radar window"></p>
 <p align="center"><img src="docs/howto-selcal.png" width="820" alt="SELCAL window"></p>
-<p align="center"><img src="docs/howto-icon.png" width="820" alt="The icon"></p>
-<p align="center"><img src="docs/howto-header.png" width="820" alt="Header"></p>
+<p align="center">
+  <a href="docs/howto-icon.png"><img src="docs/howto-icon.png" width="408" alt="The icon"></a>
+  <a href="docs/howto-header.png"><img src="docs/howto-header.png" width="408" alt="Header"></a>
+</p>
 <p align="center"><img src="docs/fs-phones.png" width="820" alt="Phone: vPilot, CPDLC and SELCAL tabs"></p>
 
 ## Features
