@@ -747,6 +747,7 @@ textarea.cw-input { resize: none; overflow-y: hidden; line-height: 1.35em; min-h
 .cw-tring-track { stroke: rgba(198, 255, 26, 0.18); }
 .cw-tring-arc { stroke: #c6ff1a; stroke-linecap: round; }
 #cw-bubble.tsat-ring .cw-tring, #cw-bubble.tsat-late .cw-tring { display: block; }
+canvas.cw-tring { pointer-events: none; }
 #cw-bubble.tsat-ring, #cw-bubble.tsat-late { border-color: transparent; }
 #cw-bubble.idle.tsat-ring, #cw-bubble.idle.tsat-late { opacity: 0.55; border-color: transparent; background-color: rgba(58, 63, 72, 0.45); }
 #cw-bubble.tsat-late .cw-tring-track { stroke: transparent; }

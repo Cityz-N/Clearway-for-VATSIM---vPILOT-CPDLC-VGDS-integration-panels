@@ -1418,16 +1418,33 @@
   // TSAT ring on the icon, once the start-up window alert is cleared and while the flight isn't activated (off
   // blocks): a yellow-green arc from 12 o'clock that retracts counterclockwise as the window (TSAT -5 to +6 min)
   // runs out, then a full electric-orange ring once the window has expired
-  var RING_C = 2 * Math.PI * 47.5;
+  // Drawn on a canvas at three times the icon's size (MSFS ignores SVG dash patterns and draws SVG coarsely).
+  var ringDrawn = "";
   function updateTsatRing() {
-    var b = el("cw-bubble"), arc = el("cw-tring-arc"), t = tsatNow(), now = Date.now();
+    var b = el("cw-bubble"), cv = el("cw-tring-cv"), t = tsatNow(), now = Date.now();
     var on = !tsatAlertOn && t && !t.activated && now >= t.tsat_ms - 300000;
     var late = on && now >= t.tsat_ms + 360000;
     b.classList.toggle("tsat-ring", !!on && !late);
     b.classList.toggle("tsat-late", !!late);
-    if (!on) return;
+    if (!on) { ringDrawn = ""; return; }
     var left = late ? 1 : Math.max(0, Math.min(1, (t.tsat_ms + 360000 - now) / 660000));
-    arc.setAttribute("stroke-dasharray", (RING_C * left).toFixed(2) + " " + RING_C.toFixed(2));
+    var size = Math.round((cv.offsetWidth || b.offsetWidth || 48) * 3);
+    var key = size + (late ? "L" : "") + left.toFixed(4);
+    if (key === ringDrawn) return;
+    ringDrawn = key;
+    if (cv.width !== size) { cv.width = size; cv.height = size; }
+    var ctx = cv.getContext("2d"), c = size / 2, lw = size * 0.042, r = size * 0.475;
+    ctx.clearRect(0, 0, size, size);
+    ctx.lineWidth = lw;
+    if (!late) {                                   // faint track under the arc
+      ctx.strokeStyle = "rgba(198, 255, 26, 0.18)";
+      ctx.beginPath(); ctx.arc(c, c, r, 0, 2 * Math.PI); ctx.stroke();
+    }
+    if (left <= 0) return;
+    // from 12 o'clock clockwise for what's left: the end retracts counterclockwise towards 12 as time runs out
+    ctx.strokeStyle = late ? "#ff7a00" : "#c6ff1a";
+    ctx.lineCap = late ? "butt" : "round";
+    ctx.beginPath(); ctx.arc(c, c, r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * left); ctx.stroke();
   }
 
   function updateClock() {
