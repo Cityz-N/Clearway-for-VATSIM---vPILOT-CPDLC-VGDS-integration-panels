@@ -761,8 +761,11 @@ canvas.cw-tring { pointer-events: none; }
 /* Icon blue (speech bubble + thin border): the Dark theme's navy hue, brightened so it shows on the dark icon */
 #cw-root { --icon-blue: #5b9bd5; }
 #cw-root.light { --icon-blue: #3d7bbf; }
-#cw-bubble.online, #cw-bubble.idle.online:hover { border-color: var(--icon-blue); }
-#cw-bubble.online .cw-glyph, #cw-bubble.idle.online:hover .cw-glyph { fill: var(--icon-blue); }
+#cw-bubble.online:not(.idle):not(.q-faint), #cw-bubble.idle.online:hover { border-color: var(--icon-blue); }
+#cw-bubble.online:not(.idle):not(.q-faint) .cw-glyph, #cw-bubble.idle.online:hover .cw-glyph { fill: var(--icon-blue); }
+/* inactive (connected, nothing for you): colourless, the same in all three themes. Pure greys, no blue cast */
+#cw-bubble.idle { background-color: #3d3d3d; border-color: #5e5e5e; }
+#cw-bubble.idle .cw-glyph { fill: #c8c8c8; }
 /* Unread messages: only the quarter under the pill takes its colour, fading towards the centre
    (vPilot top left in cyan, CPDLC top right in amber) */
 .cw-qglow { display: none; position: absolute; left: -0.14em; top: -0.14em; width: 3.4em; height: 3.4em; border-radius: 50%; }
@@ -773,12 +776,12 @@ canvas.cw-tring { pointer-events: none; }
 #cw-bubble .cw-ndot { z-index: 1; }
 /* card closed and not hovered: the icon itself fades away, only the quarters and pills keep their colour.
    Transparent colours rather than opacity, which would fade the quarters too */
-#cw-bubble.q-faint { background-color: rgba(58, 63, 72, 0.12); border-color: rgba(90, 96, 107, 0.14); box-shadow: none; }
-#cw-bubble.q-faint .cw-glyph { fill: rgba(196, 200, 208, 0.16); }
+#cw-bubble.q-faint { background-color: rgba(61, 61, 61, 0.12); border-color: rgba(94, 94, 94, 0.14); box-shadow: none; }
+#cw-bubble.q-faint .cw-glyph { fill: rgba(200, 200, 200, 0.16); }
 #cw-bubble.q-faint:hover { background-color: var(--bubble); border-color: var(--bubble-line); box-shadow: 0 0.3em 1.2em var(--shadow); }
 #cw-bubble.q-faint:hover .cw-glyph { fill: var(--glyph-off); }
 #cw-bubble.q-faint.online:hover { border-color: var(--icon-blue); }
 #cw-bubble.q-faint.online:hover .cw-glyph { fill: var(--icon-blue); }
 /* new vPilot text that isn't for you (frequency text for others, broadcasts): the small grey dot, bottom left. The icon
    is faint by colours (q-faint) instead of opacity then, so the dot stays visible */
-#cw-bubble .cw-odot { z-index: 1; opacity: 0.85; }
+#cw-bubble .cw-odot { z-index: 1; opacity: 0.85; background-color: #c8c8c8; }
